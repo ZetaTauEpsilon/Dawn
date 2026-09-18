@@ -7,6 +7,7 @@
 
 #include "../../../core/logging/log.h"
 #include "../../../state/activity/runtime.h"
+#include "../../../state/activity/vanilla/one_au/runtime.h"
 #include "../../hooking/call_gate.h"
 #include "../../hooking/detour.h"
 #include "bootflow_hook_lifecycle.h"
@@ -136,6 +137,7 @@ void poll_world_step() noexcept {
     // The camera owner invokes this poll every frame. Keep the native HUD call on that game thread;
     // calling it from the embedded server's keepalive worker is not safe.
     sample_omega_directive_presentation();
+    state::activity::vanilla::one_au::poll_escape_ship();
     omega_activity_handoff::poll();
     launchpad_handoff::poll();
     hijacked_placements::poll();

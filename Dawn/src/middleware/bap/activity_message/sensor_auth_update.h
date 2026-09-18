@@ -1,3 +1,4 @@
+#include "../../../state/activity/vanilla/one_au/controller.h"
 #pragma once
 #include "../../../state/activity/gateway_intro.h"
 #include "native/lost_sector_shield_authority.h"
@@ -193,6 +194,7 @@ struct Snapshot final {
     state::activity::newlight::launchpad::tower::Frame launchpadTower{};
     state::activity::gateway_intro::Frame gatewayIntro{};
     state::activity::newlight::launchpad::welcome::Frame newlightWelcome{};
+    state::activity::vanilla::one_au::Frame one_au{};
     state::activity::deadly_trial::Frame deadly_trial{};
     state::activity::strike_pact::Frame strike_pact{};
     state::activity::strike_bond::Frame strike_bond{};

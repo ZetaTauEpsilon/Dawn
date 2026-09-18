@@ -39,8 +39,12 @@ inline constexpr Profile kHijacked{"adventure_rumba",297,0x83211FEDU,
 // Activity8153C013 joins scenario8153C01B and launch descriptor80FDB97F.
 inline constexpr Profile kLaunchpad{"mission_launchpad",1,0xED5A458AU,
     0x71EA80ACU,0x8153C013U,0x80FDB97FU,"launchpad_direct"};
+// Installed 81327CF0 row 281, independently decoded for the Red War opening.
+inline constexpr Profile kOneAu{"mission_ember",281,0x38F926B2U,
+    0x1A6AF329U,0x80B3C07DU,0x80FDB97FU,"one_au_direct"};
 
 [[nodiscard]] constexpr const Profile* find(std::string_view package) noexcept {
+    if(package==kOneAu.package) {return &kOneAu;}
     if (package == kTowerfall.package) { return &kTowerfall; }
     if (package == kGateway.package) { return &kGateway; }
     if (package == kHauntedForest.package) { return &kHauntedForest; }

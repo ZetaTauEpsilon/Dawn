@@ -8,6 +8,7 @@
 #include "monitor_sense.h"
 #include "combatant_sense.h"
 #include "object_sense.h"
+#include "ghost_sense.h"
 #include "device_sense.h"
 #include "native/forest_generator_sense.h"
 #include "native/public_event_engagement_sense.h"
@@ -31,6 +32,7 @@ struct Output {
     monitor_sense::Output monitor{};
     combatant_sense::Output combatant{};
     object_sense::Output object{};
+    ghost_sense::Output ghost{};
     device_sense::Output device{};
     Passenger passenger{};
     std::uint32_t generatorSeed{},generatorRegions{};
@@ -50,6 +52,7 @@ struct Output {
     case 37: return native::forest_generator_sense::kSchema;
     case 39: return 0x80804EE4;
     case 43: return 0x8080626A;
+    case 65: return 0x80804D3EU;
     case 70: return 0x808094F0;
     default: return 0;
     }
@@ -144,6 +147,7 @@ template<class Reader>
         }
         if (type==2 && !combatant_sense::read_delta(reader,result.combatant)) return false;
         if (type==4 && !object_sense::read(reader,result.object)) return false;
+        if (type==65 && !ghost_sense::read(reader,result.ghost)) return false;
         if (type==23 && !device_sense::read(reader,result.device)) return false;
         // 8080954A: three biased s32 acknowledgement counters, then one bool.
         if (type==26 && !reader.skip(97)) return false;

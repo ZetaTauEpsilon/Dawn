@@ -207,6 +207,16 @@ constexpr ForcedDestination hijacked_opening() noexcept {
 inline constexpr ForcedDestination kHijackedOpening=hijacked_opening();
 static_assert(active(kHijackedOpening));
 
+// Package-derived Starboard Landing: bubble 8, region 64; all three spawn
+// points in set 2EA8FB98 lie inside the native helipad arrival volume.
+constexpr ForcedDestination one_au_opening() noexcept {
+    ForcedDestination v{};constexpr char name[]="mission_ember";
+    for(std::size_t i=0;i<sizeof(name)-1;++i) {v.packageName[i]=name[i];}
+    v.packageNameLength=sizeof(name)-1;v.bubble=8;v.sliceSet=64;v.spawnSetHash=0x2EA8FB98U;
+    v.hasBubble=v.hasSliceSet=v.hasSpawnSetHash=v.enabled=true;return v;
+}
+inline constexpr ForcedDestination kOneAuOpening=one_au_opening();
+static_assert(active(kOneAuOpening));
 } // namespace profiles
 
 static_assert(active(profiles::kTowerfallOpening));

@@ -1,6 +1,10 @@
 #include "../../../../../state/activity/coo/native_mission_forest_authority.h"
 #include "../../../../../state/activity/vendors/lifetime.h"
 #include "../../../../../state/activity/Newlight/launchpad/transit.h"
+#include "../../../../../state/activity/vanilla/one_au/transit.h"
+#include "../../../../../state/activity/vanilla/one_au/runtime.h"
+#include "vanilla/one_au_roster.h"
+#include "../../../../../state/activity/vanilla/one_au/selection.h"
 #include <Windows.h>
 #include "../../../../../client/player/player_position.h"
 
@@ -441,7 +445,8 @@ enum class OrdinaryCoverage : std::uint8_t { absent, active, inactiveBubble };
 
     namespace tables = middleware::content::packages::tables;
     std::size_t selectedSlice = layouts::kBubbleCapacity;
-    if (region >= 0 && region % static_cast<std::int32_t>(tables::kSliceSetIndexFactor) == 0) {
+    if (region >= 0 && (region % static_cast<std::int32_t>(tables::kSliceSetIndexFactor) == 0
+        || layout.tag==state::activity::vanilla::one_au::kScenario)) {
         const std::size_t ordinal =
             static_cast<std::size_t>(region) / tables::kSliceSetIndexFactor;
         if (ordinal < layouts::kBubbleCapacity) {
@@ -711,6 +716,9 @@ RosterOutcome build_roster_snapshot(Session& session,
     const bool beyondDestination=name=="adventure_vod" && !session.activity.joinedForeignSession;
     const bool beyondPrepared=state::activity::beyond_infinity::prepare(state::activity::mission_run_generation(),beyondDestination);
     if(beyondDestination && !beyondPrepared) { return RosterOutcome::noGroups; }
+    const bool oneAuDestination=name=="mission_ember" && !session.activity.joinedForeignSession;
+    const bool oneAuPrepared=state::activity::vanilla::one_au::prepare(state::activity::mission_run_generation(),oneAuDestination);
+    if(oneAuDestination && !oneAuPrepared) {return RosterOutcome::noGroups;}
     const bool deepDestination=name=="adventure_whisk" && !session.activity.joinedForeignSession;
     const bool deepPrepared=state::activity::deep_storage::prepare(state::activity::mission_run_generation(),deepDestination);
     if(deepDestination && !deepPrepared) { return RosterOutcome::noGroups; }
@@ -841,6 +849,8 @@ RosterOutcome build_roster_snapshot(Session& session,
     if(beyondPrepared && !beyond_infinity_roster::prepare_layout(layout,
         [](std::uint32_t key,std::uint32_t tag,std::uint16_t& index) noexcept { return layouts::find_group_index(key,tag,index); },
         [](std::size_t index,layouts::RosterGroup& group) noexcept { return state::build_data::find_roster_group(index,group); })) { return RosterOutcome::noGroups; }
+    if(oneAuPrepared && !one_au_roster::prepare_layout(layout,
+        [](std::size_t index,layouts::RosterGroup& group) noexcept {return state::build_data::find_roster_group(index,group);})) {return RosterOutcome::noGroups;}
     if(deepPrepared && !deep_storage_roster::prepare_layout(layout,
         [](std::uint32_t key,std::uint32_t tag,std::uint16_t& index) noexcept { return layouts::find_group_index(key,tag,index); },
         [](std::size_t index,layouts::RosterGroup& group) noexcept { return state::build_data::find_roster_group(index,group); })) { return RosterOutcome::noGroups; }
@@ -1071,6 +1081,17 @@ RosterOutcome build_roster_snapshot(Session& session,
             snapshot.missionCompletion=snapshot.beyond_infinity.completion;
             snapshot.gameplayClockTicks=snapshot.beyond_infinity.gameplayClockTicks;
         }
+    }
+    if(oneAuPrepared) {
+        std::uint32_t failedKey{};
+        if(!one_au_roster::admit(layout,scratch,snapshot.roster,
+            [](std::size_t index,layouts::RosterGroup& group) noexcept {return state::build_data::find_roster_group(index,group);},&failedKey)) {
+            std::array<char,160> line{};std::snprintf(line.data(),line.size(),"ev=one_au stage=roster result=failed registry=%08X",failedKey);
+            core::log::write(core::log::Channel::server,core::log::Level::error,line.data());return RosterOutcome::noGroups;
+        }
+        snapshot.one_au=state::activity::vanilla::one_au::snapshot(state::activity::mission_run_generation(),GetTickCount64(),state::activity::mission_seed_armed());
+        if(snapshot.one_au.enabled) {snapshot.missionCompletion=snapshot.one_au.completion;snapshot.gameplayClockTicks=snapshot.one_au.gameplayClockTicks;}
+        if(!one_au_roster::movies(scratch,snapshot.roster,snapshot.one_au.cinematic.owner.valid()?snapshot.one_au.cinematic:state::activity::vanilla::one_au::request().frame.cinematic)) {return RosterOutcome::noGroups;}
     }
     if(deepPrepared) {
         std::uint32_t failedKey{};
@@ -1498,6 +1519,7 @@ RosterOutcome build_roster_snapshot(Session& session,
         }
         if (snapshot.nightfallFailed) snapshot.missionCompletion = {};
     }
+    if(snapshot.one_au.cinematic.phase==state::activity::vanilla::one_au::cinematics::Phase::complete) {snapshot.lifetime=8;}
     snapshot.keyOnEveryParticipationSlot = defaults.rosterKeyOnAllSlots;
     // The participation record's `+0` latches only when the region index is known.
     snapshot.region = static_cast<std::uint32_t>(inputs.regionIndex);
@@ -1538,6 +1560,12 @@ RosterOutcome build_roster_snapshot(Session& session,
     snapshot.spawnSliceSet = inputs.destinationArrival;
     snapshot.spawnSetHash =
         state::activity::destination::attachable_spawn_set_hash(selection, fallback.spawnSetHash);
+    if(snapshot.one_au.enabled && inputs.regionIndex>=0 && (inputs.regionIndex>>3)==snapshot.one_au.bubble) {
+        const auto cp=snapshot.one_au.recovery.point;
+        if(cp.bubble==snapshot.one_au.bubble && (snapshot.one_au.recovery.active() || snapshot.one_au.recovery.reset)) {
+            snapshot.spawnSliceSet=static_cast<std::uint32_t>(inputs.regionIndex);snapshot.spawnSetHash=cp.spawn;
+        }
+    }
     snapshot.hasSpawnOverride =
         snapshot.spawnSetHash != 0 && snapshot.spawnSetHash != message::kAbsentSpawnSetHash;
     // A membership teleport can change the spawn within the same slice set.
@@ -1981,7 +2009,7 @@ namespace {
 
 /** Maps one copied membership after-image into the fixed wire schema. */
 [[nodiscard]] bool make_membership_wire(
-    state::activity::ActivityInstanceKey activity,bool validatedOmega,bool validatedBeyond,bool validatedGarden,bool validatedLaunchpad,bool validatedApproach,bool validatedGatewayIntro,
+    state::activity::ActivityInstanceKey activity,bool validatedOmega,bool validatedBeyond,bool validatedGarden,bool validatedLaunchpad,bool validatedApproach,bool validatedGatewayIntro,bool validatedOneAu,
     const state::activity::membership::MembershipState& membership,
     const gameplay::AdvertisementSnapshot& advertisement,
     membership_message::MembershipSnapshot& wire) noexcept {
@@ -2036,6 +2064,19 @@ namespace {
         terminal = {{generic.host.state, generic.host.token, generic.host.sliceSetIndex,
                      generic.host.sliceSetHash}, generic.present, generic.arrived,
                     generic.released};
+    }
+    const auto oneAu=state::activity::vanilla::one_au::transit::project(activity,
+        state::activity::mission_run_generation(),membership.identity.memberKey,validatedOneAu,nativeTransit);
+    if(oneAu.publish) {terminal=oneAu;}
+    if(validatedOneAu) {
+        const auto leg=[](const auto& v) {
+            return middleware::bap::activity_message::replicate_membership::RegionLeg{
+                v.sliceSetIndex,v.sliceSetHash,v.regionIndex,v.publicState,v.auxState,v.present};
+        };
+        wire.currentLeg=leg(membership.currentLeg);wire.pendingLeg=leg(membership.pendingLeg);
+        wire.localAmbassador=true;
+        const auto spawn=state::activity::vanilla::one_au::project_spawn({membership.spawn.state,membership.spawn.opaqueByte,membership.spawn.opaqueValue});
+        wire.spawn={spawn.state,spawn.token,spawn.value};
     }
     if(terminal.publish) {
         wire.teleport={terminal.host.state,terminal.host.token,terminal.host.sliceSetIndex,
@@ -2238,6 +2279,7 @@ namespace {
             allowArrival && name=="mission_launchpad" && hasLayout && layout.tag==state::activity::newlight::launchpad::kScenario,
             allowArrival && name=="cine_110_twr" && hasLayout && layout.tag==state::activity::newlight::launchpad::tower::kApproachScenario,
             allowArrival && name==state::activity::gateway_intro::kPackage && hasLayout && layout.tag==state::activity::gateway_intro::kScenario,
+            allowArrival && name=="mission_ember" && hasLayout && layout.tag==state::activity::vanilla::one_au::kScenario,
             membershipAfter, advertisement, output.membershipWire)) {
         gameplay::group::release_host_activity_lineage(advertisementLease);
         return RegionSnapshotBuildResult::failed;
@@ -2447,11 +2489,10 @@ RegionSnapshotBuildResult build_region_debt_snapshot(
                                                               debt.regionSource,
                                                               debt.committedHostRegion,
                                                               copied)
-        || std::memcmp(&copied.sourceMembership,
-                       &debt.membershipAfter,
-                       sizeof debt.membershipAfter)
-               != 0
-        || std::memcmp(&copied.destination, &debt.destination, sizeof debt.destination) != 0) {
+        || (state::activity::vanilla::one_au::selected(debt.destination)
+            ? copied.sourceMembership != debt.membershipAfter || copied.destination != debt.destination
+            : std::memcmp(&copied.sourceMembership,&debt.membershipAfter,sizeof debt.membershipAfter)!=0
+                || std::memcmp(&copied.destination,&debt.destination,sizeof debt.destination)!=0)) {
         gameplay::group::release_host_activity_lineage(boundLineageLease);
         return RegionSnapshotBuildResult::stale;
     }

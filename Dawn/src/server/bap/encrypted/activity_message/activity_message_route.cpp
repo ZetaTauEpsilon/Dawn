@@ -1,4 +1,7 @@
 #include "../../../../state/activity/Newlight/launchpad/runtime.h"
+#include "../../../../state/activity/vanilla/one_au/runtime.h"
+#include "../../../../state/activity/vanilla/one_au/sense_adapter.h"
+#include "../../../../middleware/encoding/bit_reader.h"
 #include "activity_message_route.h"
 #include "lost_sector_rewards.h"
 #include "../push/activity/native_activity_publisher.h"
@@ -710,6 +713,19 @@ void report_sense_update(Session& session, const service::Request& request) noex
                 monitor.any,monitor.count,monitor.value);
         }
     }
+    if(parsed && handleBound && epochBound) {
+        state::activity::destination::DestinationSelection selection{};
+        if(state::activity::destination::snapshot(session.activity.instance,selection)
+            && std::string_view(reinterpret_cast<const char*>(selection.packageName.data()),selection.packageNameLength)=="mission_ember") {
+            for(std::size_t i=0;i<update.objectCount;++i) {const auto& object=update.objects[i];
+                if(object.hasSquadOutput) {state::activity::vanilla::one_au::observe_source(object.registryKey,object.slotType,object.slotIndex,state::activity::vanilla::one_au::source_output(object.squadOutput));}
+                if(object.hasCombatantOutput) {state::activity::vanilla::one_au::observe_actor(object.registryKey,object.slotType,object.slotIndex,state::activity::vanilla::one_au::actor_output(object.combatantOutput));}
+                if(object.hasObjectOutput) {state::activity::vanilla::one_au::observe_use(object.registryKey,object.slotType,object.slotIndex,object.objectOutput);}
+                if(object.hasDeviceOutput) {state::activity::vanilla::one_au::observe_device(object.registryKey,object.slotType,object.slotIndex,object.deviceOutput);}
+                if(object.hasGhostOutput) {state::activity::vanilla::one_au::observe_ghost(object.registryKey,object.slotType,object.slotIndex,object.ghostOutput);}
+            }
+        }
+    }
     const bool destinationBound = parsed && epochBound && omegaSelected;
     if(parsed && handleBound && epochBound && session.activity.lineage
         && session.activity.lineage.bound==session.activity.instance
@@ -1238,7 +1254,12 @@ void report_incident(const service::Request& request,bool liveBinding,
     const bool launchpadAccepted=liveBinding && verdict==incident::Verdict::accepted && parsed.hasPayload
         && state::activity::newlight::launchpad::cinematics::decode(movieReader,movie)
         && state::activity::newlight::launchpad::observe_cinematic(movie);
-    const bool skipAccepted=skipRequested && (launchpadAccepted || ending::request_skip(state::activity::mission_run_generation()));
+    state::activity::vanilla::one_au::cinematics::Incident oneAuMovie{};
+    middleware::encoding::bits::Reader oneAuMovieReader(request.payload);
+    const bool oneAuAccepted=liveBinding && verdict==incident::Verdict::accepted && parsed.hasPayload
+        && state::activity::vanilla::one_au::cinematics::decode(oneAuMovieReader,oneAuMovie)
+        && state::activity::vanilla::one_au::observe_cinematic(oneAuMovie);
+    const bool skipAccepted=skipRequested && (launchpadAccepted || oneAuAccepted || ending::request_skip(state::activity::mission_run_generation()));
     std::array<char, core::log::kLineCapacity> line{};
     const int written = std::snprintf(line.data(),
                                       line.size(),

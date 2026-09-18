@@ -1,6 +1,6 @@
 # Mission scripts
 
-The mission runtime loads `omega.lua`, `deadly_trial.lua`, `gateway.lua`, `beyond_infinity.lua`, `deep_storage.lua`, `hijacked.lua`, `strike_pact.lua`, `strike_bond.lua`, `mission_pact.lua`, and `mission_bond.lua`. Each returns one definition through the shared Lua builders. C++ validates it and the universal executor runs the compiled graph. Beyond Infinity is a reconstruction in progress; its full native playthrough is not yet accepted. See [the Beyond Infinity implementation checkpoint](../docs/BEYOND-INFINITY-IMPLEMENTATION.md).
+The mission runtime loads `one_au.lua`, `omega.lua`, `deadly_trial.lua`, `gateway.lua`, `beyond_infinity.lua`, `deep_storage.lua`, `hijacked.lua`, `strike_pact.lua`, `strike_bond.lua`, `mission_pact.lua`, and `mission_bond.lua`. Each returns one definition through the shared Lua builders. C++ validates it and the universal executor runs the compiled graph. Beyond Infinity is a reconstruction in progress; its full native playthrough is not yet accepted. See [the Beyond Infinity implementation checkpoint](../docs/BEYOND-INFINITY-IMPLEMENTATION.md).
 
 Eater of Worlds is excluded from this build. Its source, script, tests, and reconstruction notes are preserved in [the separate archive](../../optional/eater-of-worlds/README.md).
 

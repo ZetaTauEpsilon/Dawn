@@ -1,0 +1,73 @@
+// Generated native static navigation references; no world-coordinate overrides.
+#pragma once
+#include "../../coo/objective_service.h"
+#include <string_view>
+namespace dawn::state::activity::vanilla::one_au {
+struct Navigation {std::string_view name;coo::Asset asset;};
+inline constexpr Navigation kNavigation[]{
+    {"ember_directive_reactor_mother_brain_delivery_nav_point",{0x0F3D5DD5U,0x80B3D2DDU,47,17}},
+    {"reactor_coffin_entrance_east_look_trigger",{0x0F3D5DD5U,0x80B3D2E7U,47,18}},
+    {"reactor_coffin_entrance_west_look_trigger",{0x0F3D5DD5U,0x80B3D2EAU,47,19}},
+    {"ember_directive_reactor_mother_brain_carry_object_look_trigger",{0x0F3D5DD5U,0x80B3D2E4U,47,23}},
+    {"link_directive_control_interact_nav_point",{0x1405BF98U,0x80B3DA21U,47,17}},
+    {"link_directive_processing_defend_nav_point",{0x1405BF98U,0x80B3DA21U,47,18}},
+    {"link_directive_tumbler_exit_nav_point",{0x1405BF98U,0x80B3DA21U,47,22}},
+    {"link_tumbler_door_nav_point",{0x1405BF98U,0x80B3DA21U,47,23}},
+    {"link_tumbler_interior_center_nav_point",{0x1405BF98U,0x80B3DA21U,47,24}},
+    {"cinder_directive_ready_room_02_goto_nav_point",{0x25CFBE03U,0x80B3D6BDU,47,12}},
+    {"apex_weapon_nav_point",{0x2894594AU,0x80B3DDF7U,47,12}},
+    {"link_directive_link_goto_bubble_nav_point",{0x36296035U,0x80B3DA3BU,47,5}},
+    {"processing_ceiling_klaxon_nav_point",{0x382608B7U,0x80B3DAD6U,47,153}},
+    {"control_exterior_nav_point",{0x382608B7U,0x80B3DAD6U,47,154}},
+    {"cinder_directive_sunburn_goto_nav_point",{0x4943FE2EU,0x80B3D6D7U,47,26}},
+    {"cinder_sunburn_002a_dialog_look_trigger",{0x4943FE2EU,0x80B3D6DEU,47,30}},
+    {"cinder_directive_foundry_obstruction_look_trigger",{0x4FB1299CU,0x80B3D682U,47,12}},
+    {"foundry_hatch_door_center_nav_point",{0x57627106U,0x80B3D793U,47,40}},
+    {"powerhouse_directive_landing_mercury_interact_nav_point",{0x7674801CU,0x80B3DBAFU,47,1}},
+    {"powerhouse_directive_byway_goto_nav_point",{0x7674801CU,0x80B3DBAFU,47,13}},
+    {"cinder_directive_cinder_goto_bubble_nav_point",{0x79B74A38U,0x80B3DA14U,47,7}},
+    {"powerhouse_directive_landing_mercury_clear_nav_point",{0x8696F86AU,0x80B3DBBAU,47,16}},
+    {"powerhouse_directive_landing_mercury_goto_nav_point",{0x8696F86AU,0x80B3DBBAU,47,17}},
+    {"powerhouse_to_apex_core_look_trigger",{0x8696F86AU,0x80B3DBC1U,47,19}},
+    {"powerhouse_to_apex_laser_look_trigger",{0x8696F86AU,0x80B3DBC4U,47,20}},
+    {"apex_directive_apex_goto_bubble_nav_point",{0x92260F0DU,0x80B3D295U,47,4}},
+    {"cinder_directive_chute_goto_nav_point",{0xA09DC18CU,0x80B3D664U,47,17}},
+    {"dispenser_monster_closet_nav_point",{0xA36972D4U,0x80B3D5F0U,47,96}},
+    {"reactor_clamshell_east.alarm_sequence_start_point",{0xA3B76C64U,0x80B3D433U,47,266}},
+    {"reactor_clamshell_west.alarm_sequence_start_point",{0xA3B76C64U,0x80B3D433U,47,276}},
+    {"reactor_coffin.alarm_sequence_start_point",{0xA3B76C64U,0x80B3D433U,47,280}},
+    {"reactor_mother_brain_target_nav_point",{0xA3B76C64U,0x80B3D433U,47,426}},
+    {"reactor_rail_center_nav_point",{0xA3B76C64U,0x80B3D433U,47,427}},
+    {"apex_directive_reactor_rails_escape_nav_point",{0xAD062E98U,0x80B3D2C0U,47,14}},
+    {"apex_escape_direction_wrong_nav_point",{0xAD062E98U,0x80B3D2C0U,47,15}},
+    {"apex_escape_direction_correct_nav_point",{0xAD062E98U,0x80B3D2C0U,47,16}},
+    {"cinder_directive_ready_room_01_goto_nav_point",{0xAEA6C56DU,0x80B3D6A3U,47,8}},
+    {"cinder_sunburn_001_dialog_look_trigger",{0xAEA6C56DU,0x80B3D6AAU,47,9}},
+    {"apex_directive_reactor_clamshell_goto_nav_point",{0xC98CCAB4U,0x80B3D29FU,47,20}},
+    {"reactor_clamshell_target_e_nav_point",{0xC98CCAB4U,0x80B3D29FU,47,21}},
+    {"reactor_clamshell_target_w_nav_point",{0xC98CCAB4U,0x80B3D29FU,47,22}},
+    {"apex_directive_reactor_clamshell_east_look_trigger",{0xC98CCAB4U,0x80B3D2A6U,47,24}},
+    {"apex_directive_reactor_clamshell_target_south_look_trigger",{0xC98CCAB4U,0x80B3D2A9U,47,25}},
+    {"reactor_coffin_target_look_trigger",{0xC98CCAB4U,0x80B3D2ACU,47,26}},
+    {"cinder_directive_meat_grinder_goto_nav_point",{0xD7A68FAAU,0x80B3D692U,47,7}},
+    {"helipad_sun_squad_formation_look_trigger",{0xD8CE8390U,0x80B3DDDFU,47,24}},
+    {"link_carry_object_nav_point",{0xE3EC5485U,0x80B3DA48U,47,24}},
+    {"link_directive_control_goto_trigger_nav_point",{0xE3EC5485U,0x80B3DA48U,47,25}},
+    {"link_directive_tumbler_entry_nav_point",{0xE3EC5485U,0x80B3DA48U,47,27}},
+    {"link_directive_tumbler_obstruction_nav_point",{0xE3EC5485U,0x80B3DA48U,47,28}},
+    {"apex_directive_reactor_coffin_target_nav_point",{0xE5DC8446U,0x80B3D2BCU,47,0}},
+    {"tumbler_hatch_door_look_trigger",{0xEAA003F3U,0x80B3D8EBU,47,22}},
+    {"bridge_center_look_trigger",{0xF6FFB59EU,0x80B3DD48U,47,218}},
+    {"landing_mercury_console_nav_point",{0xF6FFB59EU,0x80B3DC8AU,47,219}},
+    {"security_interceptor_nav_point",{0xFC43D98EU,0x80B3D300U,47,5}},
+    {"apex_directive_access_door_inner_nav_point",{0xFC43D98EU,0x80B3D300U,47,14}},
+    {"apex_directive_access_door_outer_nav_point",{0xFC43D98EU,0x80B3D300U,47,17}},
+    {"apex_directive_reactor_goto_nav_point",{0xFC43D98EU,0x80B3D300U,47,18}},
+    {"apex_directive_security_door_nav_point",{0xFC43D98EU,0x80B3D300U,47,19}},
+    {"apex_directive_security_goto_nav_point",{0xFC43D98EU,0x80B3D300U,47,20}},
+};
+constexpr coo::MarkerTarget target(coo::Asset a) noexcept {return {a,{0x811C9DC5U,0,0,0}};}
+constexpr coo::MarkerTarget navigation(std::string_view name) noexcept {
+    for(const auto& p:kNavigation) {if(p.name==name) {return target(p.asset);}}return {};
+}
+}

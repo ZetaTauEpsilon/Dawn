@@ -9,6 +9,7 @@
 #include "../../../core/logging/log.h"
 #include "../../../core/settings/settings.h"
 #include "../../../state/activity/Newlight/launchpad/runtime.h"
+#include "../../../state/activity/vanilla/one_au/runtime.h"
 #include "../../../state/activity/runtime.h"
 #include "internal.h"
 
@@ -78,12 +79,16 @@ void rearm_fade_release() noexcept {
 
 /** Releases the world-transition fade channel. The spawn gate decides when. */
 void release_world_fade(bool flyInComplete) noexcept {
-    // Only the admitted native arrival boundary can arm Launchpad's opening mask.
-    if (flyInComplete) { state::activity::newlight::launchpad::observe_fly_in_complete(); }
+    // Only the admitted native arrival boundary can arm the mission’s opening mask.
+    if (flyInComplete) {
+        state::activity::newlight::launchpad::observe_fly_in_complete();
+        state::activity::vanilla::one_au::observe_fly_in_complete();
+    }
     // The loading mask is visual only; the native spawn gate may finish while
     // the movie prepares. Its usual fade release must not expose that camera.
     if (g_acquire.load(std::memory_order_acquire)
-        && state::activity::newlight::launchpad::opening_mask(GetTickCount64())) { poll_opening_fade(); return; }
+        && (state::activity::newlight::launchpad::opening_mask(GetTickCount64())
+            || state::activity::vanilla::one_au::opening_mask(GetTickCount64()))) { poll_opening_fade(); return; }
     const ReleaseChannel release = g_release.load(std::memory_order_acquire);
     if (release == nullptr || g_manager == nullptr || !core::settings::get().client.fadeRelease) {
         return;
@@ -112,7 +117,8 @@ void poll_opening_fade() noexcept {
     const auto release=g_release.load(std::memory_order_acquire);
     if (!acquire || !release || !g_manager) { return; }
     const bool wanted=core::settings::get().client.fadeRelease
-        && state::activity::newlight::launchpad::opening_mask(GetTickCount64());
+        && (state::activity::newlight::launchpad::opening_mask(GetTickCount64())
+            || state::activity::vanilla::one_au::opening_mask(GetTickCount64()));
     std::uint32_t channel=kWorldTransitionChannel;
     auto colour=kOpaqueBlack;
     if (wanted) {

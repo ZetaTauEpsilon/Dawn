@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include "../../vanilla/one_au/selection.h"
 
 #include "../../../runtime/storage/internal.h"
 #include "../../transactions/internal.h"
@@ -89,7 +90,7 @@ namespace {
         || transition.activity != activity::transactions::instance_key(record)
         || transition.expectedHostRegion != activity::transactions::host_region_key(record)
         || transition.nextHostRegion != transition.expectedHostRegion
-        || transition.expectedStateRevision != state.stateRevision
+        || (!vanilla::one_au::selected(record.destination) && transition.expectedStateRevision != state.stateRevision)
         || transition.expectedRecordRevision != record.recordRevision
         || transition.movesRegion || !transition.publishesMembership
         || !prepared.hasSnapshot || !transactions::equal(transition.before, record.membership)
@@ -208,7 +209,10 @@ bool commit(PendingMutation& mutation) noexcept {
     auto& root = runtime::storage::g_state;
     ActivityState& state = root.activity;
     SessionRecord& record = state.sessions[prepared.targetSlot];
-    bool committed = state.stateRevision == prepared.expectedStateRevision && record.occupied
+    // 1AU allocates sibling cinematic hosts during this handshake. Keep its exact
+    // record/identity guards; unrelated missions retain their global revision guard.
+    bool committed = (state.stateRevision == prepared.expectedStateRevision
+                      || vanilla::one_au::selected(record.destination)) && record.occupied
                      && record.joined && record.joinedRevision != kInvalidRevision
                      && dawn::state::activity::transactions::instance_key(record)
                             == prepared.instanceKey

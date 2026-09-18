@@ -200,7 +200,7 @@ int main(int argc, char** argv) {
     check(std::all_of(panel::g_ready.begin(), panel::g_ready.end(), [](bool ready) { return ready; }), "all curated openings available");
     screenshot(screens / "dawn-osiris.ppm");
     for (std::size_t i = 0; i < openings::kMissions.size(); ++i) {
-        if (openings::kMissions[i].campaign == 0) continue;
+        if (!openings::listed(openings::kMissions[i])) continue;
         panel::g_campaign = openings::kMissions[i].campaign; g_launchState = {};
         frame(); frame();
         auto* window = mission_window();
@@ -247,6 +247,7 @@ int main(int argc, char** argv) {
         "waiting for hooks is distinct from native launch");
     g_launchState = {}; panel::g_campaign = 0; panel::g_resetScroll = true;
     frame(); frame();
+    screenshot(screens / "dawn-red-war-1au.ppm");
     const auto hiddenHomecomingRequests = g_requests;
     frame(1500, 1000, row_id(0)); frame();
     check(g_requests == hiddenHomecomingRequests, "Homecoming has no launch button");
@@ -256,6 +257,12 @@ int main(int argc, char** argv) {
         if (std::strstr(window->Name, "##dawn_content") && !std::strstr(window->Name, "##campaign_missions") && window->Active) { content = window; }
     }
     check(content != nullptr, "content surface found");
+    panel::g_campaign=1;
+    frame(1500, 1000, content->GetID("Red War")); frame(); frame();
+    check(panel::g_campaign==0, "Red War tab exposes 1AU");
+    check(std::count_if(openings::kMissions.begin(),openings::kMissions.end(),
+        [](const auto& m) {return m.campaign==0 && openings::listed(m);})==1,
+        "1AU is the only listed Red War mission");
     frame(1500, 1000, content->GetID("Curse of Osiris")); frame(); frame();
     check(panel::g_campaign == 1, "Curse of Osiris tab switches campaigns");
     frame(1500, 1000, content->GetID("Strikes")); frame(); frame();

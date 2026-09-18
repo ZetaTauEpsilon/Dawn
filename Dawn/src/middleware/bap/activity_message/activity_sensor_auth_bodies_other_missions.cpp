@@ -1,3 +1,4 @@
+#include "../../../state/activity/vanilla/one_au/authority.h"
 #include "../../../state/activity/omega/omega_ending_authority.h"
 #include <array>
 #include "../../../state/activity/gateway/authority.h"
@@ -214,10 +215,11 @@ constexpr std::size_t kSpawnKeyCount = 32;
     encoded = encoded && writer.write(0, 6)
            && writer.write(1, kPresenceWidth)
            && writer.write(snapshot.awaitClientSync ? kAwaitingClientSync : 0U, 4)
-           && writer.write(0, 1) && writer.write(snapshot.nativeRespawnRestricted ? 1U : 0U, 1);
+           && writer.write(0, 1) && writer.write(snapshot.one_au.enabled || snapshot.nativeRespawnRestricted ? 1U : 0U, 1);
     // Same optional half-float revive delay used by 1AU-UnEx. The three-second wipe
     // precedes this thirty-second delay; ordinary participation stays byte-identical.
-    if(snapshot.nativeRespawnRestricted) encoded=encoded && writer.write(0x4F80U,16);
+    if(snapshot.one_au.enabled || snapshot.nativeRespawnRestricted)
+        encoded=encoded && writer.write(snapshot.one_au.enabled && !snapshot.one_au.restricted ? 0x4200U : 0x4F80U,16);
     return encoded && writer.write(0,1) && writer.write(0,kPresenceWidth) && writer.write(128,8)
            && writer.write(kSignedZero,32);
 }
@@ -237,7 +239,7 @@ constexpr std::size_t kSpawnKeyCount = 32;
     const auto ordinal=restrictionOrdinal?restrictionOrdinal:scenarioOrdinal.value_or(0U);
     // Shared terminal publication: native mission-complete phase 6 / success 1.
     const bool completed=!snapshot.nightfallFailed && snapshot.missionCompletion.valid();
-    const auto lifetime=snapshot.nightfallFailed?8U:completed?std::uint32_t{snapshot.missionCompletion.state}:std::uint32_t{snapshot.lifetime};
+    const auto lifetime=snapshot.nightfallFailed?8U:completed?(snapshot.one_au.completion.valid()?8U:std::uint32_t{snapshot.missionCompletion.state}):std::uint32_t{snapshot.lifetime};
     bool encoded = writer.write(lifetime + 1, 4) && writer.write(completed?2U:1U, 3)
                    && writer.write(0, kPresenceWidth) && writer.write(kSignedZero, 32)
                    && writer.write(0, 32) && writer.write(kSignedZero+ordinal, 32)
@@ -313,7 +315,8 @@ write_shared_mission_state(bits::Writer& writer, bool active) noexcept {
         // level. The lifetime filter uses each mission's scenario bubble ordinal.
         const bool restricted = nativeRoundOwned
             ? snapshot.nativeRound.restricted
-            : (snapshot.strike_bond.enabled ? snapshot.strike_bond.restricted
+            : (snapshot.one_au.enabled ? snapshot.one_au.restricted
+                : snapshot.strike_bond.enabled ? snapshot.strike_bond.restricted
                 : snapshot.hijacked.enabled ? snapshot.hijacked.restricted
                 : snapshot.deep_storage.enabled ? snapshot.deep_storage.restricted
                 : snapshot.omegaMission.restriction);
@@ -800,6 +803,7 @@ legacy_auth_body_bits(const Snapshot& snapshot,
     if(const auto count=state::activity::deadly_trial::body_bits(snapshot.deadly_trial,key,slotType,slotIndex)) { return count; }
     if(const auto count=state::activity::gateway::body_bits(snapshot.gateway,key,slotType,slotIndex)) { return count; }
     if(const auto count=state::activity::beyond_infinity::body_bits(snapshot.beyond_infinity,key,slotType,slotIndex)) { return count; }
+    if(const auto count=state::activity::vanilla::one_au::body_bits(snapshot.one_au,key,slotType,slotIndex)) {return count;}
     if(const auto count=state::activity::deep_storage::body_bits(snapshot.deep_storage,key,slotType,slotIndex)) { return count; }
     if(const auto count=state::activity::strike_bond::body_bits(snapshot.strike_bond,key,slotType,slotIndex)) { return count; }
     if(const auto count=state::activity::strike_pact::body_bits(snapshot.strike_pact,key,slotType,slotIndex)) { return count; }
@@ -889,7 +893,7 @@ legacy_auth_body_bits(const Snapshot& snapshot,
     if (slotType == kSlotTypeParticipation) {
         return carriesPlayerKey
                    ? kParticipationBits + (snapshot.hasRegion ? kParticipationRegionBits : 0)
-                         + (snapshot.nativeRespawnRestricted ? 16U : 0U)
+                         + (snapshot.one_au.enabled || snapshot.nativeRespawnRestricted ? 16U : 0U)
                          + 32U*native::player_predicates::compose(snapshot.playerPredicates,snapshot.omegaPortalPlayerHash,
                              state::activity::omega::portal_entry::kRequiredPlayerHash).value().count
                    : 0;
@@ -908,7 +912,7 @@ legacy_auth_body_bits(const Snapshot& snapshot,
     }
     if (slotType == kSlotTypeMissionDirector && kInitializeMissionDirector
         && (snapshot.initializeMissionAuthorityRuntime
-            || ((snapshot.omegaMission.generation || snapshot.deep_storage.enabled || snapshot.hijacked.enabled || snapshot.strike_bond.enabled || snapshot.launchpad.enabled || snapshot.launchpadTower.enabled || snapshot.gatewayIntro.enabled) && key==0x4786C0E0U && slotIndex==1)
+            || ((snapshot.one_au.enabled || snapshot.omegaMission.generation || snapshot.deep_storage.enabled || snapshot.hijacked.enabled || snapshot.strike_bond.enabled || snapshot.launchpad.enabled || snapshot.launchpadTower.enabled || snapshot.gatewayIntro.enabled) && key==0x4786C0E0U && slotIndex==1)
             || snapshot.publishOmegaOpeningTransition
             || snapshot.publishAuthoredCueTransition)) {
         return kMissionDirectorBits;
@@ -967,6 +971,9 @@ bool legacy_write_auth_body(bits::Writer& writer,
     }
     if(state::activity::beyond_infinity::body_bits(snapshot.beyond_infinity,key,slotType,slotIndex)) {
         return state::activity::beyond_infinity::write_body(writer,snapshot.beyond_infinity,key,slotType,slotIndex);
+    }
+    if(state::activity::vanilla::one_au::body_bits(snapshot.one_au,key,slotType,slotIndex)) {
+        return state::activity::vanilla::one_au::write_body(writer,snapshot.one_au,key,slotType,slotIndex);
     }
     if(state::activity::deep_storage::body_bits(snapshot.deep_storage,key,slotType,slotIndex)) {
         return state::activity::deep_storage::write_body(writer,snapshot.deep_storage,key,slotType,slotIndex);
@@ -1081,7 +1088,7 @@ bool legacy_write_auth_body(bits::Writer& writer,
     } else if (slotType == kSlotTypeLifetime) {
         const bool sharedLifetime=key==0x4786C0E0U && slotIndex==3;
         encoded = write_lifetime(writer, snapshot,sharedLifetime
-            ?(snapshot.strike_bond.enabled && snapshot.strike_bond.restricted?17U:snapshot.hijacked.enabled && snapshot.hijacked.restricted?40U:snapshot.deep_storage.enabled && snapshot.deep_storage.restricted?19U:
+            ?(snapshot.one_au.enabled && snapshot.one_au.restricted?snapshot.one_au.bubble:snapshot.strike_bond.enabled && snapshot.strike_bond.restricted?17U:snapshot.hijacked.enabled && snapshot.hijacked.restricted?40U:snapshot.deep_storage.enabled && snapshot.deep_storage.restricted?19U:
               snapshot.omegaMission.generation && snapshot.omegaMission.restriction?14U:0U):0U,
             sharedLifetime ? snapshot.lifetimeScenarioOrdinal : std::nullopt);
     } else if (slotType == kSlotTypeActivityScript && kInitializeActivityScript
@@ -1091,10 +1098,10 @@ bool legacy_write_auth_body(bits::Writer& writer,
         encoded = write_activity_script(writer, snapshot);
     } else if (slotType == kSlotTypeMissionDirector && kInitializeMissionDirector
                && (snapshot.initializeMissionAuthorityRuntime
-                   || ((snapshot.omegaMission.generation || snapshot.deep_storage.enabled || snapshot.hijacked.enabled || snapshot.strike_bond.enabled || snapshot.launchpad.enabled || snapshot.launchpadTower.enabled || snapshot.gatewayIntro.enabled) && key==0x4786C0E0U && slotIndex==1)
+                   || ((snapshot.one_au.enabled || snapshot.omegaMission.generation || snapshot.deep_storage.enabled || snapshot.hijacked.enabled || snapshot.strike_bond.enabled || snapshot.launchpad.enabled || snapshot.launchpadTower.enabled || snapshot.gatewayIntro.enabled) && key==0x4786C0E0U && slotIndex==1)
                    || snapshot.publishOmegaOpeningTransition
                    || snapshot.publishAuthoredCueTransition)) {
-        encoded = write_mission_director(writer, snapshot,(snapshot.omegaMission.generation || snapshot.deep_storage.enabled || snapshot.hijacked.enabled || snapshot.strike_bond.enabled || snapshot.launchpad.enabled || snapshot.launchpadTower.enabled || snapshot.gatewayIntro.enabled)
+        encoded = write_mission_director(writer, snapshot,(snapshot.one_au.enabled || snapshot.omegaMission.generation || snapshot.deep_storage.enabled || snapshot.hijacked.enabled || snapshot.strike_bond.enabled || snapshot.launchpad.enabled || snapshot.launchpadTower.enabled || snapshot.gatewayIntro.enabled)
             && key==0x4786C0E0U && slotIndex==1);
     } else if (slotType == kSlotTypeConfiguration) {
         // Both optional arrays absent and the terminal tag clear is the constructed state.

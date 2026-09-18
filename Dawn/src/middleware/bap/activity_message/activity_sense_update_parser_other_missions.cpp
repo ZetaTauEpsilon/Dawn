@@ -335,6 +335,9 @@ constexpr std::uint64_t kProjectFnvPrime = 1099511628211ULL;
         if(object.slotType==39 && output.root) {
             object.passengerOutput=output.passenger;object.hasPassengerOutput=true;
         }
+        if(object.slotType==65 && output.root) {
+            object.ghostOutput=output.ghost;object.hasGhostOutput=true;
+        }
         if(object.slotType==4 && output.root) {
             object.objectOutput=output.object;object.hasObjectOutput=true;
         }

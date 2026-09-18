@@ -64,14 +64,14 @@ void refresh() noexcept {
 }
 
 void campaign_tabs() noexcept {
-    constexpr std::array<const char*, 3> names{"Curse of Osiris", "Strikes", "Nightfalls"};
+    constexpr std::array<const char*, 4> names{"Red War", "Curse of Osiris", "Strikes", "Nightfalls"};
     const float scale = card_scale();
-    const unsigned columns = ImGui::GetContentRegionAvail().x < 700.0F * scale ? 2U : 3U;
+    const unsigned columns = ImGui::GetContentRegionAvail().x < 700.0F * scale ? 2U : 4U;
     const float width = (std::max)(1.0F, (ImGui::GetContentRegionAvail().x
         - ImGui::GetStyle().ItemSpacing.x * static_cast<float>(columns - 1)) / static_cast<float>(columns));
     for (unsigned i = 0; i < names.size(); ++i) {
         if (i % columns != 0) { ImGui::SameLine(); }
-        const unsigned campaign = i + 1;
+        const unsigned campaign = i;
         const bool selected = g_campaign == campaign;
         ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(selected ? ImGuiCol_Header : ImGuiCol_FrameBg));
         if (ImGui::Button(names[i], {width, 38.0F * scale})) {
@@ -263,7 +263,7 @@ void draw() noexcept {
     ImGui::PopFont();
     ImGui::EndGroup();
     ImGui::Spacing();
-    ImGui::TextWrapped("%s", g_campaign == 0 ? "Take back the Light. Revisit the fall of the Last City."
+    ImGui::TextWrapped("%s", g_campaign == 0 ? "Board the Almighty. Stop the Red Legion's assault on the Sun."
                                             : g_campaign == 1 ? "Find Osiris. Step into the Infinite Forest."
                                             : selected_difficulty() == strikes::Difficulty::standard
                                                 ? "Take on the threats within the Infinite Forest."
@@ -276,7 +276,7 @@ void draw() noexcept {
         ImGui::TableNextColumn();
     }
     const auto count = static_cast<unsigned>(std::count_if(openings::kMissions.begin(), openings::kMissions.end(),
-        [](const auto& mission) { return mission.campaign == selected_group(); }));
+        [](const auto& mission) { return openings::listed(mission) && mission.campaign == selected_group(); }));
     const char* kind = g_campaign >= 2 ? "STRIKE" : "MISSION";
     ImGui::TextDisabled("%u %s%s", count, kind, count == 1 ? "" : "S");
     ImGui::Spacing();
@@ -287,7 +287,7 @@ void draw() noexcept {
         const auto status = launch::snapshot();
         unsigned ordinal{};
         for (std::size_t i = 0; i < openings::kMissions.size(); ++i) {
-            if (openings::kMissions[i].campaign == 0
+            if (!openings::listed(openings::kMissions[i])
                 || openings::kMissions[i].campaign != selected_group()) { continue; }
             if (mission_row(i, ++ordinal, status)) {
                 (void)launch::request_variant(i, selected_difficulty(), selected_modifiers());

@@ -1,3 +1,4 @@
+#include "../../../state/activity/vanilla/one_au/runtime.h"
 #include "coo_native_components.h"
 #include "internal.h"
 #include "beyond_infinity_plate_timer.h"
@@ -727,6 +728,7 @@ __declspec(noinline) void __fastcall carry_hook(void* component, std::uint8_t st
         key=eventKeys::bridge::carrier(at<std::uint32_t>(before.data()),at<std::uint32_t>(before.data()+0x2C));
     hooking::await_original(g_carry)(component, state, holder);
     if (scope.accepts_side_effects() && nav.enabled) { observe_carry(component, nav.run); }
+    if(scope.accepts_side_effects()) {state::activity::vanilla::one_au::observe_native_carry(component,g_holder,g_controlled);}
     if(scope.accepts_side_effects() && key.epoch) {
         std::array<std::byte,0x480> after{};
         if(!copy(component,after) || std::memcmp(before.data(),after.data(),16)!=0

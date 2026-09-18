@@ -44,6 +44,7 @@ struct Identity final {
     std::uint64_t opaqueSoid{};
     /** The role of this second type-23 scalar is not verified. */
     std::uint64_t secondaryOpaque{};
+    friend constexpr bool operator==(const Identity&,const Identity&) noexcept = default;
 };
 
 /** Spawn state kept for the current activity host, in no wire form. */
@@ -51,6 +52,7 @@ struct SpawnState final {
     std::int8_t state{};
     std::uint8_t opaqueByte{};
     std::uint64_t opaqueValue{};
+    friend constexpr bool operator==(const SpawnState&,const SpawnState&) noexcept = default;
 };
 
 /** Teleport state kept for the current activity host, in no wire form. */
@@ -59,6 +61,7 @@ struct TeleportState final {
     std::uint8_t token{};
     std::int32_t sliceSetIndex{kAbsentSliceSetIndex};
     std::uint32_t sliceSetHash{};
+    friend constexpr bool operator==(const TeleportState&,const TeleportState&) noexcept = default;
 };
 
 /** -1 means the client reported no region. */
@@ -74,6 +77,7 @@ inline constexpr std::int32_t kMaximumRegionIndex = 1022;
 struct RegionState final {
     std::int32_t index{kAbsentRegionIndex};
     std::uint32_t hash{};
+    friend constexpr bool operator==(const RegionState&,const RegionState&) noexcept = default;
 };
 
 /** Native D4 area leg. Absent deltas retain the previous leg; an explicit unset clears it. */
@@ -137,6 +141,7 @@ struct MembershipState final {
     RegionLeg currentLeg{},pendingLeg{};
     /** Actual held region, distinct from region's roster prefetch destination. */
     RegionState currentRegion{};
+    friend constexpr bool operator==(const MembershipState&,const MembershipState&) noexcept = default;
 };
 
 /** What one prepared membership transaction does. */

@@ -3,6 +3,7 @@
 #include <cstring>
 
 #include "../../transactions/internal.h"
+#include "../../vanilla/one_au/selection.h"
 
 namespace dawn::state::activity::membership::transactions {
 
@@ -15,7 +16,8 @@ bool commit_authoritative(ActivityState& state,
         || !transactions::equal(transition, prepared.regionTransitionGuard)
         || transition.activity != activity::transactions::instance_key(record)
         || transition.expectedHostRegion != activity::transactions::host_region_key(record)
-        || transition.expectedStateRevision != state.stateRevision
+        || (!vanilla::one_au::selected(record.destination)
+            && transition.expectedStateRevision != state.stateRevision)
         || transition.expectedRecordRevision != record.recordRevision
         || !equal(transition.before, record.membership)) {
         return false;

@@ -18,6 +18,7 @@ static unsigned checks{};
 static void check(bool ok,const char* why) {
     ++checks;if(!ok) {std::fprintf(stderr,"FAIL: %s\n",why);std::exit(1);}
 }
+#include "one_au_bridge_tests.h"
 static void wire(const m::Frame& frame) {
     std::array<std::byte,16384> storage{};
     for(const auto& asset:m::kAssets) {
@@ -146,7 +147,7 @@ int main() {
     controller->reset();check(!controller->frame().enabled && !controller->owner().valid(),"reset retires mission authority");
     check(controller->select(1,100) && controller->owner()!=owner,"replayed run gets a fresh authority generation");
     check(!controller->arrival(owner,1,110),"retired run receipts cannot activate new attempt");
-    cinematics();recovery();receipts();ghost_packets();
+    cinematics();recovery();receipts();ghost_packets();bridge_test::run();
     m::VentCycle cycle;
     check(cycle.sample(0)==m::VentCycle::Phase::idle && cycle.sample(250)==m::VentCycle::Phase::charging
         && cycle.sample(10000)==m::VentCycle::Phase::windup && cycle.sample(13000)==m::VentCycle::Phase::surging

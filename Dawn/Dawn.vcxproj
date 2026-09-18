@@ -1589,6 +1589,9 @@
     <None Include="scripts\hijacked.lua" />
     <None Include="scripts\one_au.lua" />
     <ClInclude Include="src\state\activity\vanilla\one_au\entry.h" />
+    <ClInclude Include="src\state\activity\vanilla\one_au\bridge_scan.h" />
+    <ClInclude Include="src\state\activity\vanilla\one_au\bridge_native.h" />
+    <None Include="src\client\hooks\bootflow\one_au_bridge_scan.inl" />
     <ClInclude Include="src\state\activity\vanilla\one_au\native_combatant_authority.h" />
     <ClInclude Include="src\state\activity\vanilla\one_au\native_presentation_authority.h" />
     <ClInclude Include="src\state\activity\vanilla\one_au\sense_adapter.h" />

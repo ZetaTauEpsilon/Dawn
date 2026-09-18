@@ -1,5 +1,6 @@
 #include <Windows.h>
 #include "runtime.h"
+#include "bridge_scan.h"
 #include "entry.h"
 #include "../../runtime.h"
 #include "../../../../core/logging/log.h"
@@ -102,6 +103,9 @@ Frame snapshot(std::uint64_t run,std::uint64_t now,bool ready) noexcept {
     return f;
 }
 Request request() noexcept {const std::lock_guard lock(mutex);return current()?Request{controller.owner(),controller.frame()}:Request{};}
+BridgeScanRequest bridge_scan_request() noexcept {
+    const std::lock_guard lock(mutex);return current()?bridge_scan_request(controller.owner(),controller.frame()):BridgeScanRequest{};
+}
 std::uint64_t native_run() noexcept {const std::lock_guard lock(mutex);return current()?selectedRun:0;}
 void observe_arrival(coo::Generation owner,std::uint8_t route) noexcept {
     const std::lock_guard lock(mutex);

@@ -75,6 +75,10 @@ __declspec(noinline) void __fastcall gateway_damage_hook(const void* context,con
 __declspec(noinline) void __fastcall gateway_damage_summary_hook(const void* context,std::uint32_t attacker,std::uint32_t target,
     bool killed,bool mode,const void* regions,float amount) noexcept {
     const hooking::CallGate::Scope gate{g_gate};
-    if(gate.accepts_side_effects() && killed) { gateway_damage_receipt(context); }
+    if(gate.accepts_side_effects()) {
+        // Observe-only probe for the damage HUD; it never changes a native argument.
+        observe_damage_summary(attacker,target,killed,mode,regions,amount);
+        if(killed) { gateway_damage_receipt(context); }
+    }
     hooking::await_original(g_moduleDamageSummary)(context,attacker,target,killed,mode,regions,amount);
 }

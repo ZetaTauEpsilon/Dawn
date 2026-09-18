@@ -36,6 +36,7 @@
 #include "beyond_infinity_lens_damage.h"
 #include "deep_storage_lens_damage.h"
 #include "hijacked_boss_damage.h"
+#include "damage_meter_probe.h"
 #include "strike_pact_boss_damage.h"
 #include "../../../state/activity/strike_pact/runtime.h"
 #include "strike_bond_boss_damage.h"
@@ -58,6 +59,7 @@
 namespace dawn::client::hooks::bootflow {
 namespace {
 namespace native = omega_arc_charge_native;
+namespace probe = damage_meter_probe;
 namespace catalog = state::activity::omega_arc_charge;
 namespace lair = state::activity::omega_first_lair;
 namespace transit = state::activity::omega_crown_transit;
@@ -127,6 +129,18 @@ inline constexpr unsigned kRejectLines = 64;
 struct RejectKey final { std::uint32_t handle{}; std::uint8_t site{}, reason{}; };
 std::array<RejectKey, kRejectLines> g_rejects{};
 unsigned g_rejectCount{}, g_rejectLines{};
+
+// Outgoing-damage probe for the damage HUD. B7E3C0 carries the attacker, target and
+// absolute amount that HUD needs, but its coverage is unestablished: every existing
+// consumer matched a single boss entity, so nothing says whether it observes ordinary
+// outgoing hits at all. Raw rows are capped per run, so the opening of an encounter
+// stays readable, while the window totals keep running afterwards and report a whole
+// encounter's coverage without flooding. All of it is observe-only.
+inline constexpr unsigned kDamageProbeRows = 96;
+inline constexpr std::uint64_t kDamageProbeWindow = 128;
+probe::Window g_damageWindow{};
+std::uint64_t g_damageCalls{}, g_damageWindowStart{}, g_damageRun{};
+unsigned g_damageRows{};
 
 bool copy(const void* source, std::span<std::byte> destination) noexcept {
     const auto address = reinterpret_cast<std::uintptr_t>(source);
@@ -706,6 +720,98 @@ void after_trial_use(void* component,const TrialUse& before) noexcept {
     if(after.binding!=before.binding || after.player!=before.player || after.requested!=before.requested) { return; }
     std::uint8_t active{};if(!read_at(reinterpret_cast<std::uintptr_t>(component)+0x2D0,active) || active>1) { return; }
     state::activity::deadly_trial::observe_interaction(before.binding,before.requested,before.before,after.before,active==1);
+}
+/**
+ * Totals one B7E3C0 damage summary and emits the bounded probe lines it completes.
+ * Runs on the damage thread inside the owner's CallGate scope, before the native
+ * forward. It never reads the native regions argument: that layout is unrecovered,
+ * so the capture records only that one was supplied.
+ */
+void observe_damage_summary(std::uint32_t attacker, std::uint32_t target, bool killed, bool mode,
+                            const void* regions, float amount) noexcept {
+    // Original 4B2260 is the same local-entity call the interaction receipts already make
+    // from this thread. A player that does not resolve classifies as unknown, never as a
+    // match, so an unresolved frame cannot inflate the outgoing total.
+    const auto local = local_controlled_entity();
+    const auto direction = probe::classify(attacker, target, local);
+    const auto now = GetTickCount64();
+    probe::Window completed{};
+    std::uint64_t sequence{}, span{}, windowRun{}, run{};
+    bool emitRow{}, emitWindow{};
+    AcquireSRWLockExclusive(&g_lock);
+    run = g_run;
+    if (g_damageWindowStart == 0) { g_damageWindowStart = now; }
+    // A run change closes the window that was open, so an encounter keeps its tail
+    // instead of losing it to the next run's first summary.
+    if (run != g_damageRun) {
+        if (g_damageWindow.calls != 0) {
+            completed = g_damageWindow;
+            span = now - g_damageWindowStart;
+            windowRun = g_damageRun;
+            emitWindow = true;
+        }
+        g_damageWindow = {};
+        g_damageCalls = 0;
+        g_damageRows = 0;
+        g_damageWindowStart = now;
+        g_damageRun = run;
+    }
+    probe::observe(g_damageWindow, direction, killed, mode, regions != nullptr, amount);
+    sequence = ++g_damageCalls;
+    if (g_damageRows < kDamageProbeRows) { ++g_damageRows; emitRow = true; }
+    if (!emitWindow && g_damageWindow.calls >= kDamageProbeWindow) {
+        completed = g_damageWindow;
+        span = now - g_damageWindowStart;
+        windowRun = run;
+        g_damageWindow = {};
+        g_damageWindowStart = now;
+        emitWindow = true;
+    }
+    ReleaseSRWLockExclusive(&g_lock);
+    if (emitRow) {
+        std::array<char, 320> line{};
+        const int length = std::snprintf(line.data(), line.size(),
+            "ev=damage_probe stage=summary run=%llu seq=%llu dir=%s attacker=%08X target=%08X "
+            "local=%08X killed=%u mode=%u regions=%u amount=%.6g finite=%u mutation=observe_only",
+            static_cast<unsigned long long>(run), static_cast<unsigned long long>(sequence),
+            probe::text(direction), attacker, target, local, killed ? 1U : 0U, mode ? 1U : 0U,
+            regions != nullptr ? 1U : 0U, static_cast<double>(amount),
+            std::isfinite(amount) ? 1U : 0U);
+        if (length > 0 && static_cast<std::size_t>(length) < line.size()) {
+            core::log::write(core::log::Channel::client, core::log::Level::info,
+                            {line.data(), static_cast<std::size_t>(length)});
+        }
+    }
+    if (!emitWindow) { return; }
+    // The extremes mean nothing without a finite sample, so they report zero instead.
+    const double minimum = completed.finite != 0 ? static_cast<double>(completed.amountMin) : 0.0;
+    const double maximum = completed.finite != 0 ? static_cast<double>(completed.amountMax) : 0.0;
+    std::array<char, 512> line{};
+    const int length = std::snprintf(line.data(), line.size(),
+        "ev=damage_probe stage=window run=%llu calls=%llu span_ms=%llu out=%llu out_row=%llu "
+        "in=%llu in_row=%llu self=%llu other=%llu unknown=%llu killed=%llu mode=%llu regions=%llu "
+        "finite=%llu nonfinite=%llu nonpositive=%llu sum=%.6g out_sum=%.6g min=%.6g max=%.6g "
+        "mutation=observe_only",
+        static_cast<unsigned long long>(windowRun),
+        static_cast<unsigned long long>(completed.calls), static_cast<unsigned long long>(span),
+        static_cast<unsigned long long>(completed.count(probe::Direction::outgoing)),
+        static_cast<unsigned long long>(completed.count(probe::Direction::outgoingRow)),
+        static_cast<unsigned long long>(completed.count(probe::Direction::incoming)),
+        static_cast<unsigned long long>(completed.count(probe::Direction::incomingRow)),
+        static_cast<unsigned long long>(completed.count(probe::Direction::self)),
+        static_cast<unsigned long long>(completed.count(probe::Direction::other)),
+        static_cast<unsigned long long>(completed.count(probe::Direction::unknown)),
+        static_cast<unsigned long long>(completed.killed),
+        static_cast<unsigned long long>(completed.modeSet),
+        static_cast<unsigned long long>(completed.regionsPresent),
+        static_cast<unsigned long long>(completed.finite),
+        static_cast<unsigned long long>(completed.nonFinite),
+        static_cast<unsigned long long>(completed.nonPositive),
+        completed.amountSum, completed.outgoingSum, minimum, maximum);
+    if (length > 0 && static_cast<std::size_t>(length) < line.size()) {
+        core::log::write(core::log::Channel::client, core::log::Level::info,
+                        {line.data(), static_cast<std::size_t>(length)});
+    }
 }
 #include "beyond_infinity_plate_hooks.inl"
 #include "beyond_infinity_object_receipts.inl"

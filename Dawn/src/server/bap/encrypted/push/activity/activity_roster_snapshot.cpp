@@ -952,8 +952,8 @@ RosterOutcome build_roster_snapshot(Session& session,
             ==native_publisher::Role::invalid) {return RosterOutcome::noGroups;}
     if (name == "mission_scot") {
         const auto admission = omega_lair::admit(layout, scratch, snapshot.roster,
-            [](std::size_t index, layouts::RosterGroup& group) noexcept {
-                return state::build_data::find_roster_group(index, group);
+            [](std::uint32_t key, std::uint32_t tag, layouts::RosterGroup& group) noexcept {
+                return state::build_data::find_roster_group_by_key(key, tag, group);
             });
         static std::atomic_int lastAdmission{-1};
         if (lastAdmission.exchange(static_cast<int>(admission)) != static_cast<int>(admission)) {
@@ -972,8 +972,8 @@ RosterOutcome build_roster_snapshot(Session& session,
     }
     if (name == "mission_scot") {
         const auto admission = omega_lair::admit(layout, scratch, snapshot.roster,
-            [](std::size_t index, layouts::RosterGroup& group) noexcept {
-                return state::build_data::find_roster_group(index, group);
+            [](std::uint32_t key, std::uint32_t tag, layouts::RosterGroup& group) noexcept {
+                return state::build_data::find_roster_group_by_key(key, tag, group);
             }, true);
         static std::atomic_int lastBossAdmission{-1};
         if (lastBossAdmission.exchange(static_cast<int>(admission)) != static_cast<int>(admission)) {
@@ -989,8 +989,8 @@ RosterOutcome build_roster_snapshot(Session& session,
     }
     if (name == "mission_scot") {
         const auto admission = omega_lair::admit_crown(layout, scratch, snapshot.roster,
-            [](std::size_t index, layouts::RosterGroup& group) noexcept {
-                return state::build_data::find_roster_group(index, group);
+            [](std::uint32_t key, std::uint32_t tag, layouts::RosterGroup& group) noexcept {
+                return state::build_data::find_roster_group_by_key(key, tag, group);
             });
         static std::atomic_int lastCrownAdmission{-1};
         if (lastCrownAdmission.exchange(static_cast<int>(admission)) != static_cast<int>(admission)) {
@@ -1007,8 +1007,8 @@ RosterOutcome build_roster_snapshot(Session& session,
     if(name=="mission_scot") {
         for(const auto& group:state::activity::omega_lair_full_roster::kCombatGroups) {
             const auto admission=omega_lair::admit_full(layout,scratch,snapshot.roster,
-                [](std::size_t index,layouts::RosterGroup& row) noexcept {
-                    return state::build_data::find_roster_group(index,row);
+                [](std::uint32_t key,std::uint32_t tag,layouts::RosterGroup& row) noexcept {
+                    return state::build_data::find_roster_group_by_key(key,tag,row);
                 },group);
             if(admission!=omega_lair::Admission::added && admission!=omega_lair::Admission::present) {
                 return RosterOutcome::noGroups;

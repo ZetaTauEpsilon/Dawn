@@ -5,6 +5,7 @@
 #include "state/activity/membership/transactions/internal.h"
 #include "state/activity/transactions/internal.h"
 #include "state/activity/vanilla/one_au/selection.h"
+#include "server/bap/encrypted/activity_message/membership/activity_membership_route.h"
 
 namespace {
 
@@ -96,6 +97,18 @@ void authoritative_guard_includes_region_fields() {
     second = first;
     second.hasRegion = false;
     CHECK(!membership::transactions::equal(first, second));
+    namespace route=dawn::server::bap::encrypted::activity_message::membership;
+    namespace client=dawn::middleware::bap::activity_message::client_authoritative_data;
+    client::ClientAuthoritativeData parsed{};
+    parsed.currentLeg={8,0x12345678,64,1,2,true};parsed.pendingLeg={7,0xFEDCBA98,56,0,1,true};
+    ActivityState state{};auto record=fresh_record(64);auto mutation=region_move(state,record,56);
+    const auto mapped=route::make_authoritative(parsed,"mission_ember");
+    mutation.authoritativeInput.currentLeg=mapped.currentLeg;mutation.authoritativeInput.pendingLeg=mapped.pendingLeg;
+    mutation.authoritativeGuard=mutation.authoritativeInput;
+    mutation.regionTransition.after=membership::transactions::merge(mutation.regionTransition.after,mutation.authoritativeInput);
+    mutation.regionTransitionGuard=mutation.regionTransition;
+    CHECK(membership::transactions::commit_authoritative(state,record,mutation));
+    CHECK(record.membership.currentLeg==mapped.currentLeg && record.membership.pendingLeg==mapped.pendingLeg);
 }
 
 void accepted_region_move_advances_before_publication() {

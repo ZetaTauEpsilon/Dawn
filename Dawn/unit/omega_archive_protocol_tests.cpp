@@ -14,10 +14,12 @@ void mix(std::uint64_t value) { digest = (digest ^ value) * 1099511628211ULL; }
 #ifdef OMEGA_PORT_LOCAL
 #include "population_packet_cases.h"
 #include "omega_loading_roster_cases.h"
+#include "omega_hotfix_protocol_cases.h"
 #endif
 
 int main() {
 #ifdef OMEGA_PORT_LOCAL
+    omega_hotfix_protocol_checks();
     population_packet_cases();
     omega_loading_cases::run();
 #endif

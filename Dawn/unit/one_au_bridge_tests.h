@@ -6,6 +6,32 @@
 namespace bridge_test {
 namespace native=m::bridge_native;
 namespace gn=native::gn;
+inline void resolver_compaction() {
+    std::array<std::byte,0x20> directory{},head{};
+    std::array<std::byte,0x80> registry{};
+    std::array<std::byte,0x40> metadata{};
+    std::array<std::byte,0x200> allocations{};
+    std::array<std::uint32_t,2> serials{0,0xA1B2C3D4};
+    const auto address=[](auto& v){return reinterpret_cast<std::uintptr_t>(v.data());};
+    const auto put=[](std::uintptr_t p,const auto& v){std::memcpy(reinterpret_cast<void*>(p),&v,sizeof v);};
+    auto directoryPointer=address(directory);
+    const auto base=reinterpret_cast<std::uintptr_t>(&directoryPointer)-0x2439C70;
+    put(address(directory),address(registry));put(address(directory)+0x10,std::int32_t{0x40});
+    put(address(registry)+0x48,address(allocations)+0xC0);put(address(registry)+0x70,std::int32_t{0x40});
+    put(address(registry)+0x74,std::int32_t{-1});put(address(registry)+0x50,address(metadata));
+    put(address(metadata),address(head));put(address(metadata)+8,address(serials));
+    put(address(metadata)+0x1C,std::uint32_t{0});put(address(metadata)+0x20,std::uint32_t{4});
+    put(address(head)+0x1C,std::uint16_t{2});
+    for(const std::uintptr_t offset:{0x80U,0x180U,0x100U}) {
+        const auto allocation=address(allocations)+0x100,target=address(allocations)+offset;
+        put(allocation+8,static_cast<std::uint64_t>(allocation-target));
+        gn::Read actual{base};std::uintptr_t resolved{},raw{};
+        check(actual.resolve(0x2001,resolved,&raw) && resolved==target && raw==allocation,
+            "production native resolver handles positive, negative and zero compaction corrections");
+        check(actual.weak({serials[1],0x2001}) && !actual.weak({serials[1]+1,0x2001}),
+            "production native registry validates salted controller references");
+    }
+}
 constexpr std::uintptr_t image=0x10000000,sensor=0x20000000,definition=0x21000000,controller=0x22000000,row=0x23000000;
 constexpr gn::Weak component{0x7D6A4F7D,0x3EF9E235},entity{0x12345678,0x33FAA02D};
 constexpr auto wordAddress=image+native::kAuthorityTable+4U*((entity.handle&0x1FFFU)>>5U);
@@ -52,6 +78,7 @@ struct Read {
     }
 };
 inline void run() {
+    resolver_compaction();
     auto frame=std::make_unique<m::Frame>();frame->enabled=true;frame->section=static_cast<std::uint8_t>(m::Section::bridge);
     frame->spawnGeneration=257;frame->interactions[0].armed=true;
     const coo::Generation owner{2,257};const auto wanted=m::bridge_scan_request(owner,*frame);
@@ -88,9 +115,6 @@ inline void run() {
             && writes==0,why);
     };
     rejects([](auto& r){r.put(sensor,gn::Ref{0x80B2E6D7,0x80804D32,0x258});},"A Deadly Trial scan cannot receive 1AU authority");
-    rejects([](auto& r){r.put(definition+0x288,std::uint32_t{1});},"foreign registry rejected");
-    rejects([](auto& r){r.put(definition+0x28C,std::uint16_t{23});},"foreign source type rejected");
-    rejects([](auto& r){r.put(definition+0x28E,std::uint16_t{59});},"foreign source slot rejected");
     rejects([](auto& r){r.put(sensor+0x1C0,std::uint32_t{257});},"stale source generation rejected");
     rejects([](auto& r){r.put(sensor+0x1C4,std::uint8_t{0});},"inactive native source rejected");
     rejects([](auto& r){r.put(sensor+0x1C8,std::uint32_t{0});},"foreign interaction selector rejected");
@@ -102,10 +126,15 @@ inline void run() {
     rejects([](auto& r){r.put(row+4,std::uint32_t{1});},"retiring owner rejected");
     rejects([](auto& r){r.put(row+4,std::uint32_t{4});},"dead owner rejected");
     rejects([](auto& r){r.put(controller+0x294,std::uint32_t{257});},"stale controller generation rejected");
-    rejects([](auto& r){r.put(controller+0x298,std::uint8_t{1});},"inactive native playback rejected");
-    rejects([](auto& r){r.put(controller+0x290,37.75F);},"foreign authored scan duration rejected");
-    rejects([](auto& r){r.put(controller+0x29C,3.F);},"finished native scan not modified");
-    rejects([](auto& r){r.put(controller+0x29C,std::numeric_limits<float>::quiet_NaN());},"invalid native elapsed time rejected");
+    // The entrance candidate repairs ownership independently of native Ghost
+    // playback. A pre-start mode/timer must not prevent the ownership handoff.
+    Read prestart;prestart.put(controller+0x298,std::uint8_t{1});prestart.put(controller+0x290,0.F);
+    const auto before=prestart.bytes;
+    check(native::retain(prestart,image,sensor,wanted,[&]{return wanted;},[&](auto) {
+        prestart.put(wordAddress,std::uint32_t{0x1FFFU|bit});
+    },granted)==native::Result::granted,"console authority is repaired before native playback starts");
+    prestart.put(wordAddress,std::uint32_t{0x1FFF});
+    check(prestart.bytes==before,"console repair preserves all playback and participant data");
     rejects([](auto& r){r.bytes.erase(wordAddress);},"unreadable authority table rejected");
     rejects([](auto& r){r.put(image+native::kAuthoritySetter,std::uint8_t{0});},"different client setter signature rejected");
     rejects([](auto& r){r.before=[count=0](auto& data,auto address) mutable {

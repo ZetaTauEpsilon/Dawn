@@ -45,7 +45,8 @@ consteval auto cohort_members(const std::uint16_t (&slots)[N]) noexcept {
 inline constexpr auto kHelipad=cohort_members<kLanding>({12,13,14});
 inline constexpr auto kCatwalk=cohort_members<kLanding>({3,4,5,6,7});
 inline constexpr auto kCatwalkMid=cohort_members<kLanding>({8,9,10,11});
-inline constexpr auto kPipes=cohort_members<kBridge>({58,59});
+// Source 58 is the stray pipe support enemy. Spawn and clearance share this list.
+inline constexpr auto kPipes=cohort_members<kBridge>({59});
 // 38/39 are bridge_vignette_*, authored to the bridge task group, not the
 // landing fight. Holding them in Mercury spawned them across a bridge that has
 // not extended yet, and made the console gate wait on squads over the gap.

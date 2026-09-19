@@ -1,0 +1,19 @@
+{
+  "sourceBase": "1f00c834d3a95f57072114bfe8a2740f3c253338",
+  "sourcePatchSha256": "c5e11af6230321128795acff20666fa718e0885fbd291f40318d7852162f4e18",
+  "oneAuChecks": 1136,
+  "rosterChecks": 1867,
+  "omegaProtocolBodies": 71421,
+  "omegaProtocolPackets": 12,
+  "omegaFullPackets": 12,
+  "otherMissionProtocol": "passed",
+  "hudMachineCases": 448,
+  "rosterMachineCases": 12,
+  "setupCasesPerShell": 9,
+  "setupShells": [
+    "Windows PowerShell 5.1",
+    "PowerShell 7"
+  ],
+  "gameplayVerified": false,
+  "installed": false
+}

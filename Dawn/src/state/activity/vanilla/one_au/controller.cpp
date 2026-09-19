@@ -66,15 +66,14 @@ bool Controller::cinematic(coo::Generation gen,const cinematics::Incident& e,std
     const bool accepted=cinematics_.incident(gen,e.target,e.registry,e.type,e.slot,e.runtime,now);
     if(accepted) {frame_.cinematic=cinematics_.state();++frame_.revision;}return accepted;
 }
-void Controller::life(coo::Generation gen,std::uint32_t entity,bool alive,std::uint64_t now) noexcept {
+void Controller::life(coo::Generation gen,std::uint32_t entity,bool alive,std::uint64_t) noexcept {
     if(gen!=owner() || entity==UINT32_MAX || frame_.cinematic.phase!=cinematics::Phase::gameplay || frame_.finished) {return;}
     if(alive) {
         livingPlayer_=entity;
         if(frame_.recovery.phase==recovery::Phase::countdown) {frame_.recovery={};++frame_.revision;}
-    } else if(entity==livingPlayer_ && frame_.restricted && !frame_.recovery.active()) {
-        frame_.recovery={};frame_.recovery.phase=recovery::Phase::countdown;frame_.recovery.point=recovery::checkpoint(frame_.section);
-        frame_.recovery.deadline=now+recovery::kCountdownMs;++frame_.revision;
     }
+    // Darkness is presentation only. Native individual respawns preserve the
+    // current encounter; a player death must never begin checkpoint recovery.
 }
 void Controller::restore_checkpoint(std::uint64_t now) noexcept {
     const auto old=frame_;const auto run=run_;const auto clock=clock_;reset();
@@ -694,9 +693,8 @@ bool Controller::advance(std::uint64_t run,std::uint64_t now,bool ready) noexcep
         if(!frame_.escapeClock && !frame_.escapeStopped) {frame_.escapeClock=true;frame_.escapeStart=now;}
         if(frame_.escapeClock) {
             frame_.escapeElapsed=now>=frame_.escapeStart?now-frame_.escapeStart:0;
-            if(frame_.escapeElapsed>=60000) {
-                frame_.recovery={};frame_.recovery.phase=recovery::Phase::requested;frame_.recovery.point=recovery::checkpoint(frame_.section);frame_.restricted=true;++frame_.revision;
-            }
+            // Keep the escape timer as presentation without resetting progress
+            // when it expires. Reaching the exit still ends the timed objective.
         }
     }
     if(frame_.recovery.holding()) {objectives_.clear();hazards();frame_.presentation=objectives_.state();return true;}

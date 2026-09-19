@@ -1,6 +1,7 @@
 #include "../../../state/activity/vanilla/one_au/authority.h"
 #include "../../../state/activity/omega/omega_ending_authority.h"
 #include <array>
+#include "native/omega_activity_script.h"
 #include "../../../state/activity/gateway/authority.h"
 #include "../../../state/activity/beyond_infinity/authority.h"
 #include "../../../state/activity/deep_storage/authority.h"
@@ -216,10 +217,10 @@ constexpr std::size_t kSpawnKeyCount = 32;
            && writer.write(1, kPresenceWidth)
            && writer.write(snapshot.awaitClientSync ? kAwaitingClientSync : 0U, 4)
            && writer.write(0, 1) && writer.write(snapshot.one_au.enabled || snapshot.nativeRespawnRestricted ? 1U : 0U, 1);
-    // Same optional half-float revive delay used by 1AU-UnEx. The three-second wipe
-    // precedes this thirty-second delay; ordinary participation stays byte-identical.
+    // 1AU keeps its three-second individual respawn delay even when the darkness
+    // presentation is active. Other restricted activities retain thirty seconds.
     if(snapshot.one_au.enabled || snapshot.nativeRespawnRestricted)
-        encoded=encoded && writer.write(snapshot.one_au.enabled && !snapshot.one_au.restricted ? 0x4200U : 0x4F80U,16);
+        encoded=encoded && writer.write(snapshot.one_au.enabled ? 0x4200U : 0x4F80U,16);
     return encoded && writer.write(0,1) && writer.write(0,kPresenceWidth) && writer.write(128,8)
            && writer.write(kSignedZero,32);
 }
@@ -338,8 +339,11 @@ write_shared_mission_state(bits::Writer& writer, bool active) noexcept {
                                          const Snapshot& snapshot) noexcept {
     // The shared-state head is set in the client storage object. That materializes the datum but
     // does not supply the activity-host executor that advances the authored mission graph.
-    return writer.write(1, kPresenceWidth) && legacy_pad_bits(writer, 5 * 64 + 32)
-           && writer.write(snapshot.activityScriptFlag ? 1U : 0U, kPresenceWidth)
+    const bool timeState = snapshot.archiveOmega
+        ? native::omega_activity_script::time_state(writer)
+        : writer.write(1, kPresenceWidth) && legacy_pad_bits(writer, 5 * 64 + 32);
+    return timeState
+           && writer.write(!snapshot.archiveOmega && snapshot.activityScriptFlag ? 1U : 0U, kPresenceWidth)
            && writer.write(kSignedZero
                                + static_cast<std::uint32_t>(snapshot.activityScriptState),
                            32);

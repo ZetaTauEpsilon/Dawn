@@ -150,7 +150,8 @@ __declspec(noinline) std::uintptr_t __fastcall tick(void* component,void* output
     const auto result=fn(component,output);
     if(scope.accepts_side_effects()) {
         const auto sensor=reinterpret_cast<std::uintptr_t>(component);
-        update(sensor);deep_scan::update(sensor);hijacked_scan::update(sensor);campaign_scan::update(sensor);one_au_scan::update(sensor);
+        update(sensor);deep_scan::update(sensor);hijacked_scan::update(sensor);
+        campaign_scan::update(sensor);one_au_scan::update(sensor);
     }
     return result;
 }

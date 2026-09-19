@@ -19,6 +19,9 @@ static void check(bool ok,const char* why) {
     ++checks;if(!ok) {std::fprintf(stderr,"FAIL: %s\n",why);std::exit(1);}
 }
 #include "one_au_bridge_tests.h"
+#include "one_au_entrance_tests.h"
+#include "one_au_callback_tests.h"
+#include "one_au_pipe_tests.h"
 static void wire(const m::Frame& frame) {
     std::array<std::byte,16384> storage{};
     for(const auto& asset:m::kAssets) {
@@ -82,6 +85,53 @@ static void receipts() {
         && delta.deliveryRevision==4 && delta.deliveryState==0 && delta.dead && delta.hasGeneration,
         "production actor parser preserves transport receipts");
     check(!m::actor_output({}).hasGeneration,"absent actor revision stays absent");
+}
+static void no_wipes() {
+    namespace bits=dawn::middleware::encoding::bits;
+    for(unsigned section=0;section<static_cast<unsigned>(m::Section::count);++section) {
+        for(const bool restricted:{false,true}) {
+            auto controller=std::make_unique<m::Controller>();
+            check(controller->select(91,0),"no-wipe fixture selects mission");
+            const auto owner=controller->owner();const auto movie=m::cinematics::kMovies[0];
+            check(controller->arrival(owner,1,10)
+                && controller->cinematic(owner,{5239,movie.registry,1,6,0},20)
+                && controller->cinematic(owner,{1685,movie.registry,2,6,0},30)
+                && controller->arrival(owner,4,40),"no-wipe fixture reaches gameplay");
+            // Model a later encounter without bypassing the actual death,
+            // update, spawn-handshake or authority publication functions.
+            auto& frame=const_cast<m::Frame&>(controller->frame());
+            frame.section=static_cast<std::uint8_t>(section);frame.restricted=restricted;
+            frame.interactions[0].completed=true;frame.native[0].generation=777;
+            controller->life(owner,0xA0002001U,true,100);
+            for(const auto time:{std::uint64_t{101},std::uint64_t{5000},std::uint64_t{65000}}) {
+                controller->life(owner,0xA0002001U,false,time);
+                check(controller->advance(91,time,true),"mission advances after individual death");
+                check(!frame.recovery.active() && frame.wipeRemaining==0,
+                    "death and escape timeout never request a wipe");
+                check(frame.section==section && frame.spawnGeneration==owner.value
+                    && frame.interactions[0].completed && frame.native[0].generation==777,
+                    "death preserves encounter progress and native generations");
+                const auto spawn=controller->spawn({0,29,0x12345678},time);
+                check(spawn.state==0 && spawn.token==29 && spawn.value==0x12345678,
+                    "individual death does not initiate checkpoint spawn handshake");
+                std::array<std::byte,64> data{};bits::Writer writer(data);
+                check(m::write_body(writer,frame,0x4786C0E0U,35,1) && writer.bit_count()==359,
+                    "darkness authority retains native wire shape");
+                bits::Reader reader(data);std::uint64_t value{};
+                check(reader.read(1,value) && value==(restricted?1U:0U),
+                    "darkness presentation remains enabled for restricted encounters");
+                check(reader.skip(3) && reader.read(3,value) && value==0,
+                    "darkness authority publishes no wipe countdown or activation");
+            }
+            controller->life(owner,0xA0002002U,true,65001);
+            controller->life(owner,0xA0002002U,false,65002);
+            check(!frame.recovery.active(),"a respawned player can die again without a wipe");
+            if(section==static_cast<unsigned>(m::Section::escape)) {
+                check(frame.escapeClock && frame.escapeElapsed>=60000,
+                    "escape timer continues presentation after expiry without recovery");
+            }
+        }
+    }
 }
 static void ghost_packets() {
     namespace bits=dawn::middleware::encoding::bits;
@@ -147,7 +197,7 @@ int main() {
     controller->reset();check(!controller->frame().enabled && !controller->owner().valid(),"reset retires mission authority");
     check(controller->select(1,100) && controller->owner()!=owner,"replayed run gets a fresh authority generation");
     check(!controller->arrival(owner,1,110),"retired run receipts cannot activate new attempt");
-    cinematics();recovery();receipts();ghost_packets();bridge_test::run();
+    cinematics();recovery();no_wipes();receipts();ghost_packets();bridge_test::run();entrance_test::run();entrance_callback_test::run();pipe_encounter();
     m::VentCycle cycle;
     check(cycle.sample(0)==m::VentCycle::Phase::idle && cycle.sample(250)==m::VentCycle::Phase::charging
         && cycle.sample(10000)==m::VentCycle::Phase::windup && cycle.sample(13000)==m::VentCycle::Phase::surging

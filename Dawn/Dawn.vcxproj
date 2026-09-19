@@ -1591,6 +1591,8 @@
     <ClInclude Include="src\state\activity\vanilla\one_au\entry.h" />
     <ClInclude Include="src\state\activity\vanilla\one_au\bridge_scan.h" />
     <ClInclude Include="src\state\activity\vanilla\one_au\bridge_native.h" />
+    <ClInclude Include="src\state\activity\vanilla\one_au\entrance_native.h" />
+    <ClInclude Include="src\client\hooks\bootflow\one_au_entrance.h" />
     <None Include="src\client\hooks\bootflow\one_au_bridge_scan.inl" />
     <ClInclude Include="src\state\activity\vanilla\one_au\native_combatant_authority.h" />
     <ClInclude Include="src\state\activity\vanilla\one_au\native_presentation_authority.h" />

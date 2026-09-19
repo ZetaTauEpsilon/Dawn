@@ -1,7 +1,6 @@
 #pragma once
 #include "bridge_scan.h"
 #include "../../../../client/hooks/bootflow/gateway_native_read.h"
-#include <cmath>
 
 namespace dawn::state::activity::vanilla::one_au::bridge_native {
 namespace gn=client::hooks::bootflow::gateway_native;
@@ -15,14 +14,11 @@ struct Identity {
 };
 template<class Read>
 bool capture(Read& read,std::uintptr_t sensor,const BridgeScanRequest& wanted,Identity& out) noexcept {
-    gn::Ref ref{},controllerRef{};Identity found{};std::uintptr_t definition{};
-    std::uint32_t registry{},sourceGeneration{},selector{},self{},owner{},actual{},flags{},revision{};
-    std::uint16_t type{},slot{};std::uint8_t enabled{},mode{},active{};float duration{},elapsed{};
+    gn::Ref ref{},controllerRef{};Identity found{};
+    std::uint32_t sourceGeneration{},selector{},self{},owner{},actual{},flags{},revision{};
+    std::uint8_t enabled{};
     if(!wanted.enabled() || !read.value(sensor,ref)
         || ref.handle!=kBridgeLink.definition || ref.kind!=0x80804D32U || ref.offset!=0x258
-        || !read.resolve(ref.handle,definition) || !read.value(definition+0x288,registry) || registry!=kBridgeLink.registry
-        || !read.value(definition+0x28C,type) || type!=kBridgeLink.type
-        || !read.value(definition+0x28E,slot) || slot!=kBridgeLink.slot
         || !read.value(sensor+0x1C0,sourceGeneration) || sourceGeneration!=wanted.generation
         || !read.value(sensor+0x1C4,enabled) || enabled!=1
         || !read.value(sensor+0x1C8,selector) || selector!=0x811C9DC5U
@@ -33,11 +29,7 @@ bool capture(Read& read,std::uintptr_t sensor,const BridgeScanRequest& wanted,Id
         || !read.value(found.address+0x2C,owner) || !read.make_weak(owner,found.entity)
         || !read.entity_row(found.entity,found.row) || !read.value(found.row+0xC,actual) || actual!=owner
         || !read.value(found.row+4,flags) || (flags&5U)
-        || !read.value(found.address+0x294,revision) || revision!=wanted.generation
-        || !read.value(found.address+0x298,mode) || mode!=2
-        || !read.value(found.address+0x299,active) || active>1
-        || !read.value(found.address+0x290,duration) || duration!=3.F
-        || !read.value(found.address+0x29C,elapsed) || !std::isfinite(elapsed) || elapsed<0.F || elapsed>=duration) { return false; }
+        || !read.value(found.address+0x294,revision) || revision!=wanted.generation) { return false; }
     out=found;return true;
 }
 enum class Result { ignored,local,granted };

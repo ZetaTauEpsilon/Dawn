@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "oneAuSourceChecks": 1136,
+  "sharedProtocolSuitePassed": true,
+  "playerLifeMachineCases": 360,
+  "escapeTimerMachineCases": 24,
+  "respawnPolicyMachineCases": 16,
+  "onlyThreeReviewedRangesChanged": true,
+  "originalDllSha256": "be08e2a8b73f661fe291998f6ac6b3f36838dfa4bcab9f28f24d5e0d43779f0f",
+  "patchedDllSha256": "ea5de3644dc5e7436393f8aa81297ad14f7cb970939975de37891ed8feb48c71",
+  "inGamePlaytest": false,
+  "completeMissionPlaythrough": false
+}

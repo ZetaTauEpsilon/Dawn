@@ -151,7 +151,9 @@ void catalog_identity_checks() {
     layouts::clear();
     std::printf("Production catalog: shared-key identity selection, reordered rows and ambiguity rejection passed\n");
 }
+#include "omega_hotfix_roster_cases.h"
 int main() {
+    omega_hotfix_roster_checks();
     catalog_identity_checks();
     run("Deadly Trial",trial::native::kScenario,"adventure_ginger",64,trial::native::kRoot,trial::native::kGroups,
         [](auto& layout,auto index,auto find){return trial::prepare_layout(layout,index,find);},

@@ -14,20 +14,30 @@ nine immutable section graphs.
 ## Runtime
 
 - Native activity 266, `mission_towerfall`, activity tag `0x80B500AC`, scenario
-  `0x80B500BC`, package hash `0x9ACCB518`, dialogue bank `0x80C2AF61`.
+  `0x80B500BC`, package hash `0x9ACCB518`, dialogue bank `0x80C2AF61`, music bank
+  `0x80B5090F`.
 - Opening bubble 9 (Underwatch), slice set 72. The spawn set stays absent on
   purpose: the authored arrival owns the point inside the slice, exactly as the
   existing Towerfall prelaunch profile already declared.
-- Launch: the campaign panel requests activity 266 directly through the same
-  `publish_direct` opening path as 1AU. The Chosen (282) donor fallback that the
-  archived Towerfall experiment used is untouched.
+- Launch: the Red War opening is two activities. The campaign panel first
+  launches the Tower cinematic activity (public activity 2, `cine_110_twr`,
+  scenario `0x80B4A0EA`, movie owner `0x32DDAD77` in slice set 25), and when its
+  movie ends the launch adapter launches activity 266 from inside that world
+  through the same `publish_direct` opening path as 1AU (`prologue.h`, driven
+  exactly like Gateway's briefing chain). The Chosen (282) donor fallback that
+  the archived Towerfall experiment used is untouched.
 - Lua entry: `Dawn/scripts/homecoming.lua` (mission id `homecoming`, profile
   `homecoming.native.v1`); native controller: `src/state/activity/vanilla/homecoming`.
-- Cinematic owners: intro `0x964D8F24` (bubble 2, region 17), Amanda's pickup
-  `0xE8B02346` (bubble 8, region 65), outro `0x42E8F541` (bubble 1, region 9).
-  Route 4 returns to the Underwatch (region 72) after the intro; route 5 lands on
-  the command ship (region 64) after the pickup. The roster synthesizes the three
-  type-6 owners the same way 1AU does and retires the whole roster during the outro.
+- Mission cinematic owners: the ship approach `0x964D8F24` (bubble 2, region 17),
+  Amanda's pickup `0xE8B02346` (bubble 8, region 65), the outro `0x42E8F541`
+  (bubble 1, region 9). Route 4 returns to the Underwatch (region 72) after the
+  approach; route 5 lands on the command ship (region 64) after the pickup. The
+  roster synthesizes the three type-6 owners the same way 1AU does and retires
+  the whole roster during the outro.
+- The plaza (bubble 6, region 48) is an authored *public* bubble inside a
+  private mission. The client's slice-set switch into it waits for a public
+  activity host that never connects, so `region_private.cpp` reports it private
+  for the whole native run regardless of the `regionPrivate` setting.
 
 ## Sections
 
@@ -38,10 +48,21 @@ decks, generator room, escape. Section bubbles are 9, 9, 4, 6, 6, 0, 8, 8, 8.
 
 - Encounters are cohorts of authored sources (`kCohorts`). The native spawner
   still owns template selection, placement and actor creation; the graph only
-  requests categories. Sources with two, three or four authored categories use
-  the per-category request encoding in `native_combatant_authority.h`. The
-  relocated corridor source (military 13) requests 1/3/2 and the plaza waves
-  request three or four of one category, matching the Sunrise declarations.
+  requests categories. Placed encounters are requested when their section (or
+  the preceding gate) starts, not at the encounter trigger, so squads stand in
+  cover before the player sees them: overlook, friendlies and corridor squads on
+  entering the military wing, the hangar floor when the first gate opens, every
+  bazaar squad when the bazaar comes into view, the pod bays on landing on the
+  command ship, the airlock, matrix and engine-room squads on entering the
+  generator section. Only authored arrivals still drop in: the breach and
+  Centurion Scenes, the corridor rush, the drop pods, the plaza waves.
+- Every source an authored Scene casts is Scene-owned (`SCENE_OWNED` in the
+  generator): the frames firing at the Cabal ship, the breach, Shaxx, Cayde,
+  the Centurion, the hero moment, the post-gun guards, every civilian pose, run
+  and reaction performance, and the hangar fake fight with its frames. Those
+  sources never appear in a loose cohort; the standing civilian (36) and the
+  aiming Red Guard (113), which stood idle in the Cayde and armory doorways, are
+  not requested at all.
 - Clears settle for three seconds before they count (audit constraint), and
   every cohort clear is derived from admission and death receipts, never from
   timers.
@@ -58,14 +79,44 @@ decks, generator room, escape. Section bubbles are 9, 9, 4, 6, 6, 0, 8, 8, 8.
 
 ## Timing
 
-Dialogue cues are queued with explicit delays measured from the retail
-walkthrough captions (YouTube `7_OVvrItocY`, cross-checked with four other
-recordings): gameplay starts about 03:30 into the video, the first Ghost line
-seven seconds after landing, Cayde's scene near 04:03, Shaxx at 04:23, the
-hangar reveal at 05:38, the plaza lines from 07:35, the boulevard lines around
-09:35–11:05 and the command-ship lines from 12:00 to 15:41 before the outro at
-16:04. The graphs encode those offsets as `eventAfter` steps and per-cue delays;
-the native clip durations from the bank gate the next cue, so lines never overlap.
+Beats follow the retail walkthrough captions (YouTube `7_OVvrItocY`, gameplay
+begins at 03:30; cross-checked with four other recordings). Seconds after the
+Underwatch landing:
+
+| Beat | Retail | Graph |
+|---|---|---|
+| Ghost "Let's get moving" (1) | +7 | landing + 7 s |
+| breach, "Watch out! / Cabal!" and cue 6 | +15 / +17 | wall-explode trigger, cues 4, 5 (+1.5 s), 6 (+4 s) |
+| Cayde's golden gun | +33 | approach cleared, player near the door |
+| Shaxx at the armory | +53 | player near Shaxx |
+| armory music | +68 | `tv_music_shaxx_door` |
+| "Look at the size of that thing" (34) | +128 | hangar window trigger |
+| hangar music, Red Legion conversation (37) | +159 / +162 | `tv_music_cabal_ship_reveal`, cue 3 s later |
+| first assault, "we are better" (52), "don't let them past the gate" (51) | +245 / +267 | Zavala's Cabal cleared + 5 s, 51 twenty seconds after 52 |
+| "we hold here" (55), barrage "missiles, stay inside my shield" (57) | +319 / +329 | clear + 5 s, then +10 s |
+| last wave "more Red Legion" (54), shuttles away (59) | +360 / +365 | after the revival, clear + 5 s |
+| Ikora's Nova, Zavala's pickup order (72) | +399 / +409 | start trigger, blast + 10 s |
+| "Holliday is inbound" (75), "someone told me you need a ride" (76) | +437 / +455 | bazaar entry, Hawk present |
+| deck music, "kick them where it hurts" (77) | +502 / +507 | landing, +3 s |
+| hologram (78), route (79), Cayde's status (82) | +532 / +543 / +565 | landing + 25 s, scan, scan + 20 s |
+| "straight ahead" (85), sabotage music, "destroy the turbines" (86) | +666 / +670 / +696 | generator door, chamber trigger |
+| "shields are down" (91), "headed topside" (92) | +726 / +731 | shutdown, +5 s |
+
+The native clip durations from the bank gate the next cue, so lines never
+overlap; the audio bank owns the Vanguard broadcast (cue 10) and the Scene-owned
+Cayde and Shaxx lines.
+
+## Music
+
+Bank `0x80B5090F` has twenty authored sections; their FNV-1 names were recovered
+from the descriptor: 0 `underwatch_ruins`, 1 `first_cabal`, 3 `after_cayde`,
+4 `shaxx_door`, 6 `first_pod`, 12 `leaving_plaza`, 16 `battleship_deck`,
+17 `battleship_sabotage`, 18 `run`, 19 `ending`. The graphs select them at the
+authored music volumes and mission beats through the `music` mechanic. Sections 7
+and 8 are used positionally for the hangar reveal and the plaza approach volumes
+(`tv_music_cabal_ship_reveal`, `tv_music_plaza_cabal_ship`); their names did not
+resolve and are marked inferred in `mission.h`. The remaining unnamed sections
+are not selected.
 
 ## Native receipts and repairs
 
@@ -87,7 +138,10 @@ the native clip durations from the bank gate the next cue, so lines never overla
 - Plaza registry `0x28A6B21F`: the ordinary roster walk classifies it as not
   relevant (second registry array, explicit slice). `registries.h` admits it to
   the scenario cache like the lost-sector and open-world catalogs; the cache
-  format version moved from 65 to 66 so stale caches rebuild.
+  format version moved from 65 to 66 so stale caches rebuild. The plaza areas
+  registry `0xF8F959CD` has no cache record and publishes nothing, so it stays
+  out of the wire roster (admitting it failed every roster snapshot and killed
+  the host).
 
 ## Integration points
 
@@ -95,17 +149,23 @@ Every touchpoint mirrors 1AU: wire snapshot frame, authority body dispatch,
 roster admission (`homecoming_roster.h`, groups resolved by key), membership
 legs and transit, keepalive publication, sense/cinematic routing, opening fade
 mask, position sampling, object/enemy/dialogue receipts, membership commit
-guards, and the launch panel. The compact Tower Watch cue manifest is skipped
+guards, and the launch panel. The Tower cinematic chain reuses the launchpad
+Tower approach bookend (`launchpad_roster::approach`, `tower::write`) and the
+Gateway briefing departure. The compact Tower Watch cue manifest is skipped
 while the native module is prepared.
 
 ## Verification
 
-- `Dawn/unit/homecoming_tests.vcxproj`: launch identity, catalog consistency,
-  the nine section graphs, the shipped Lua entry, every authority body width in
-  three frame states, the intro/pickup/outro cinematic sequence, the 94-row
-  dialogue service, the door authority grants and stale receipts.
+- `Dawn/unit/homecoming_tests.vcxproj`: launch identity, catalog consistency
+  (cache-record invariant, Scene casts, loose cohorts free of Scene-owned
+  sources), the nine section graphs, the shipped Lua entry, every authority body
+  width in three frame states, the approach/pickup/outro cinematic sequence, the
+  Tower cinematic prologue chain, the 94-row dialogue service, the music
+  selection, the door authority grants and stale receipts.
 - Existing suites updated for the listed mission: `one_au_tests`,
   `mission_launch_visual_tests`, `player_position_tests`.
-- The mission has not been played end to end in this session; the section
-  graphs, timings and native repairs follow the audit and the retail recording
-  and need an in-game pass.
+- In-game: the first playtest confirmed the ship-approach movie, the Underwatch,
+  the Cayde and Shaxx scenes, the armory and the military wing up to the plaza
+  entry. The plaza public-bubble hang, the idle doorway civilians, the drop-in
+  spawns, the missing Tower prologue and the cue and music timing found in that
+  test are addressed above and need another pass.

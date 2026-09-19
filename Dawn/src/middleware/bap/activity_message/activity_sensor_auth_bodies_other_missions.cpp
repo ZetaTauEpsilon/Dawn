@@ -1,5 +1,6 @@
 #include "../../../state/activity/vanilla/one_au/authority.h"
 #include "../../../state/activity/vanilla/homecoming/authority.h"
+#include "../../../state/activity/vanilla/homecoming/prologue.h"
 #include "../../../state/activity/omega/omega_ending_authority.h"
 #include <array>
 #include "native/omega_activity_script.h"
@@ -820,6 +821,7 @@ legacy_auth_body_bits(const Snapshot& snapshot,
     if(const auto count=state::activity::newlight::launchpad::welcome::body_bits(snapshot.newlightWelcome,key,slotType,slotIndex)) {return count;}
     if(state::activity::newlight::launchpad::tower::matches(snapshot.launchpadTower,key,slotType,slotIndex)) {return 263;}
     if(state::activity::gateway_intro::matches(snapshot.gatewayIntro,key,slotType,slotIndex)) {return 263;}
+    if(state::activity::vanilla::homecoming::prologue::matches(snapshot.homecomingPrologue,key,slotType,slotIndex)) {return 263;}
     if(const auto count=state::activity::newlight::launchpad::body_bits(snapshot.launchpad,key,slotType,slotIndex)) {return count;}
     if(const auto* request=native::engagement::find(snapshot.engagements,key,slotType,slotIndex)) return native::engagement::body_bits(*request);
     if(const auto* request=native::world_device::find(snapshot.devices,key,slotType,slotIndex)) return native::world_device::valid(request->state)?native::world_device::kPayloadBits:0;
@@ -1001,6 +1003,9 @@ bool legacy_write_auth_body(bits::Writer& writer,
     }
     if(state::activity::gateway_intro::matches(snapshot.gatewayIntro,key,slotType,slotIndex)) {
         return state::activity::gateway_intro::write(writer,snapshot.gatewayIntro);
+    }
+    if(state::activity::vanilla::homecoming::prologue::matches(snapshot.homecomingPrologue,key,slotType,slotIndex)) {
+        return state::activity::vanilla::homecoming::prologue::write(writer,snapshot.homecomingPrologue);
     }
     if(state::activity::newlight::launchpad::body_bits(snapshot.launchpad,key,slotType,slotIndex)) {
         return state::activity::newlight::launchpad::write_body(writer,snapshot.launchpad,key,slotType,slotIndex);

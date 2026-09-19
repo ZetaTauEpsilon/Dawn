@@ -1,6 +1,7 @@
 #include "../../../../../state/activity/Newlight/launchpad/transit.h"
 #include "../../../../../state/activity/vanilla/one_au/transit.h"
 #include "../../../../../state/activity/vanilla/homecoming/transit.h"
+#include "../../../../../state/activity/vanilla/homecoming/prologue.h"
 #include "activity_membership_push.h"
 
 #include <Windows.h>
@@ -102,6 +103,10 @@ make_wire_snapshot(state::activity::ActivityInstanceKey activity,
         state::activity::mission_run_generation(),snapshot.identity.memberKey,
         name=="cine_110_twr" && layout.tag==state::activity::newlight::launchpad::tower::kApproachScenario,nativeTransit,GetTickCount64());
     if(approach.publish) {terminal=approach;}
+    const auto prologueTransit=state::activity::vanilla::homecoming::prologue::project(activity,
+        state::activity::mission_run_generation(),snapshot.identity.memberKey,
+        name=="cine_110_twr" && layout.tag==state::activity::vanilla::homecoming::prologue::kScenario,nativeTransit,GetTickCount64());
+    if(prologueTransit.publish) {terminal=prologueTransit;}
     const auto briefing=state::activity::gateway_intro::project(activity,
         state::activity::mission_run_generation(),snapshot.identity.memberKey,
         name==state::activity::gateway_intro::kPackage && layout.tag==state::activity::gateway_intro::kScenario,nativeTransit,GetTickCount64());

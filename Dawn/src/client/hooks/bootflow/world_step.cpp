@@ -9,6 +9,7 @@
 #include "../../../state/activity/runtime.h"
 #include "../../../state/activity/vanilla/one_au/runtime.h"
 #include "../../../state/activity/vanilla/homecoming/runtime.h"
+#include "../../../state/activity/vanilla/homecoming/prologue.h"
 #include "../../hooking/call_gate.h"
 #include "../../hooking/detour.h"
 #include "bootflow_hook_lifecycle.h"
@@ -45,7 +46,8 @@ hooking::detour::Handle g_suppressedHandle{};
 
 /** Answers "suppressed" only while the ending handoff's transition window is armed. */
 bool __fastcall loading_cinematics_suppressed() noexcept {
-    if (omega_activity_handoff::suppress_active() || state::activity::gateway_intro::suppress_loading()) {
+    if (omega_activity_handoff::suppress_active() || state::activity::gateway_intro::suppress_loading()
+        || state::activity::vanilla::homecoming::prologue::suppress_loading()) {
         return true;
     }
     const Suppressed original = g_suppressedOriginal.load(std::memory_order_acquire);

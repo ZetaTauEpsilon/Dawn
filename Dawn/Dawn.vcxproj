@@ -1639,6 +1639,7 @@
     <ClInclude Include="src\state\activity\vanilla\homecoming\console_native.h" />
     <ClInclude Include="src\state\activity\vanilla\homecoming\entrance_native.h" />
     <ClInclude Include="src\state\activity\vanilla\homecoming\door_native.h" />
+    <ClInclude Include="src\state\activity\vanilla\homecoming\prologue.h" />
     <ClInclude Include="src\client\hooks\bootflow\homecoming_entrance.h" />
     <None Include="src\client\hooks\bootflow\homecoming_console_scan.inl" />
     <ClInclude Include="src\server\bap\encrypted\push\activity\vanilla\homecoming_roster.h" />

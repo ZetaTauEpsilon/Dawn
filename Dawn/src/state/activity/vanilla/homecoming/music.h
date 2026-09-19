@@ -4,12 +4,11 @@
 namespace dawn::state::activity::vanilla::homecoming::music {
 inline constexpr auto kSensor=kMusicAsset;
 inline constexpr std::size_t kBits=128+129*55;
-// Bank 80B5090F: only section 1 (first_cabal) is authenticated for the plaza defence.
-// The original host's complete score mapping has not been recovered, so the
-// selector starts that section on plaza arrival and releases it on leaving.
+// Bank 80B5090F: twenty authored sections. The graphs select them at the authored music
+// volumes and mission beats (music_section); the native bank owns transitions and playback.
 constexpr int section(const Frame& f) noexcept {
-    if(!f.enabled || f.finished || f.cinematic.phase!=cinematics::Phase::gameplay) {return -1;}
-    return f.section==static_cast<std::uint8_t>(Section::plaza)?1:-1;
+    if(!f.enabled || f.finished || f.cinematic.phase!=cinematics::Phase::gameplay || f.musicSection==music_section::none) {return -1;}
+    return f.musicSection;
 }
 template<class W> bool write(W& w,const Frame& f) noexcept {
     const auto selected=section(f);

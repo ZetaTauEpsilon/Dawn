@@ -9,6 +9,7 @@
 #include "../../../../../state/activity/vanilla/homecoming/runtime.h"
 #include "vanilla/homecoming_roster.h"
 #include "../../../../../state/activity/vanilla/homecoming/selection.h"
+#include "../../../../../state/activity/vanilla/homecoming/prologue.h"
 #include <Windows.h>
 #include "../../../../../client/player/player_position.h"
 
@@ -1289,6 +1290,10 @@ RosterOutcome build_roster_snapshot(Session& session,
         intro::selected(state::activity::mission_run_generation(),selection.activityIndex,layout.tag,GetTickCount64());
         snapshot.gatewayIntro=intro::frame(state::activity::mission_run_generation());
         if(snapshot.gatewayIntro.enabled && !launchpad_roster::gateway(scratch,snapshot.roster)) {return RosterOutcome::noGroups;}
+        namespace prologue=state::activity::vanilla::homecoming::prologue;
+        prologue::selected(state::activity::mission_run_generation(),selection.activityIndex,layout.tag,GetTickCount64());
+        snapshot.homecomingPrologue=prologue::frame(state::activity::mission_run_generation());
+        if(snapshot.homecomingPrologue.enabled && !launchpad_roster::approach(scratch,snapshot.roster)) {return RosterOutcome::noGroups;}
     }
     if(launchpadPrepared) {
         std::uint32_t failedKey{};
@@ -2076,6 +2081,9 @@ namespace {
     const auto approach=state::activity::newlight::launchpad::tower::project(activity,
         state::activity::mission_run_generation(),membership.identity.memberKey,validatedApproach,nativeTransit,GetTickCount64());
     if(approach.publish) {terminal=approach;}
+    const auto prologueTransit=state::activity::vanilla::homecoming::prologue::project(activity,
+        state::activity::mission_run_generation(),membership.identity.memberKey,validatedApproach,nativeTransit,GetTickCount64());
+    if(prologueTransit.publish) {terminal=prologueTransit;}
     const auto briefing=state::activity::gateway_intro::project(activity,
         state::activity::mission_run_generation(),membership.identity.memberKey,validatedGatewayIntro,nativeTransit,GetTickCount64());
     if(briefing.publish) {terminal=briefing;}

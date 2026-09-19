@@ -19,8 +19,13 @@ EVIDENCE = Path(os.environ.get('HOMECOMING_EVIDENCE', 'C:/Destiny 2 Development/
 OUTPUT = ROOT / 'Dawn/src/state/activity/vanilla/homecoming/native_catalog.h'
 
 # Squad sources whose actors are requested by an authored native Scene rather than loosely.
+# Every source an authored Scene casts is scene-owned: the native Scene requests its one
+# actor (frames vs the Cabal ship, the breach, Shaxx, Cayde, the Centurion, the hero moment,
+# the post-gun guards, every civilian pose and reaction, the hangar fake fight and frames).
 SCENE_OWNED = {
-    0x9D8076E4: {6, 7, 15, 20, 24, 27, 28, 30, 32, 50},
+    0x9D8076E4: {1, 2, 3, 4, 6, 7, 15, 20, 24, 27, 28, 30, 32, 34, 35, 40, 41, 43, 44, 45, 46, 47, 48, 49, 50,
+                 65, 66, 67, 84, 86, 88, 90, 92, 94, 96, 98, 100, 112, 114, 115},
+    0xAA9D42BE: {66, 67, 68, 69, 71, 73, 75, 76},
     0x7BA8F95D: {17, 18, 19, 20, 21, 22},
     0x28A6B21F: {6, 10, 11, 14, 15, 16, 17, 30, 32},
 }

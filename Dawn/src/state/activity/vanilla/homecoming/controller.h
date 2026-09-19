@@ -35,6 +35,8 @@ struct TacticalState {
 };
 struct Frame {
     bool enabled{},finished{},restricted{},fault{};std::uint8_t section{},bubble{9},activeRow{coo::kNoDialogue};
+    // Selected authored music section of bank 80B5090F; none until the graph starts one.
+    std::uint8_t musicSection{music_section::none};
     std::uint32_t spawnGeneration{},revision{},objective{};std::uint64_t gameplayClockTicks{};
     std::array<std::uint32_t,std::size(kDialogue)> generations{};
     std::array<NativeState,std::size(kAssets)> native{};

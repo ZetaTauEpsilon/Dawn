@@ -6,6 +6,8 @@
 #include "state/activity/vanilla/homecoming/door_native.h"
 #include "state/activity/vanilla/homecoming/console_scan.h"
 #include "state/activity/vanilla/homecoming/registries.h"
+#include "state/activity/vanilla/homecoming/prologue.h"
+#include "state/activity/vanilla/homecoming/music.h"
 #include "server/bap/encrypted/push/activity/vanilla/homecoming_roster.h"
 #include "client/activity/campaign_openings.h"
 #include "middleware/encoding/bit_writer.h"
@@ -17,6 +19,7 @@
 
 namespace m=dawn::state::activity::vanilla::homecoming;
 namespace coo=dawn::state::activity::coo;
+namespace dawn::core::log { void write(Channel,Level,std::string_view) noexcept {} }
 static unsigned checks{};
 static void check(bool ok,const char* why) {
     ++checks;if(!ok) {std::fprintf(stderr,"FAIL: %s\n",why);std::exit(1);}
@@ -139,6 +142,32 @@ static void cinematics() {
     sequence.begin(owner,0);sequence.fly_in_complete(owner);sequence.advance(90000);
     check(sequence.state().phase==cine::Phase::failed,"an unanswered opening fails closed");
 }
+static void prologue_chain() {
+    namespace pro=m::prologue;
+    pro::Sequence chain;chain.begin(100);
+    check(chain.wanted()==pro::kTowerCinematic,"the Red War opening starts with the Tower cinematic activity");
+    check(!chain.queued(pro::kMission,100) && chain.queued(pro::kTowerCinematic,100),"only the wanted activity can be queued");
+    chain.selected(7,266,m::kScenario,110);
+    check(!chain.frame(7).enabled,"the mission scenario cannot bind the cinematic");
+    chain.selected(7,pro::kTowerCinematic,pro::kScenario,110);
+    check(chain.frame(7).enabled && !chain.frame(8).enabled && chain.frame(7).revision==1,"the loaded Tower cinematic scenario binds the run");
+    check(pro::matches(chain.frame(7),0x32DDAD77U,6,0) && !pro::matches(chain.frame(7),0x32DDAD77U,6,1),"the cinematic owner body matches the approach movie");
+    const dawn::state::activity::ActivityInstanceKey instance{0x9EAA300100200001ULL,{7}};
+    auto authority=chain.project(instance,7,42,{},120);
+    check(authority.publish && authority.host.state==1 && authority.host.sliceSetIndex==pro::kSliceSet,"arrival requests the authored cinematic slice");
+    pro::native::Observation arrived{};arrived.hasTeleport=true;arrived.local={3,authority.host.token,pro::kSliceSet,pro::kSliceHash};arrived.hasRegion=true;arrived.currentRegion=pro::kSliceSet;
+    authority=chain.project(instance,7,42,arrived,130);
+    check(chain.state().phase==pro::Phase::offered && chain.frame(7).play,"reaching the cinematic slice offers playback");
+    check(!chain.incident(7,{5239,0x964D8F24U,1,6,0},140),"the mission intro cannot answer the Tower cinematic");
+    check(chain.incident(7,{5239,0x32DDAD77U,1,6,0},140) && chain.state().phase==pro::Phase::playing,"native playback start is accepted");
+    check(chain.incident(7,{1685,0x32DDAD77U,1,6,0},150) && chain.state().phase==pro::Phase::missionRequested,"native completion requests the mission");
+    check(chain.wanted()<0,"the mission waits for the teleport release");
+    pro::native::Observation released{};released.hasTeleport=true;released.local={0,authority.host.token,pro::kSliceSet,pro::kSliceHash};
+    chain.project(instance,7,42,released,160);
+    check(chain.wanted()==pro::kMission && chain.queued(pro::kMission,160) && chain.frame(7).enabled,"the released teleport queues Homecoming while the owner stays published");
+    chain.complete();check(chain.state().phase==pro::Phase::complete && !chain.frame(7).enabled,"arrival in Homecoming completes the chain");
+    chain.begin(200);chain.tick(300000);check(chain.state().phase==pro::Phase::failed,"an unanswered cinematic launch fails closed");
+}
 static void dialogue_rows() {
     coo::DialogueService<std::size(m::kDialogue)> service;
     struct Presentation {std::uint8_t activeRow{coo::kNoDialogue};std::uint32_t objective{};std::array<std::uint32_t,std::size(m::kDialogue)> generations{};} presentation;
@@ -213,10 +242,17 @@ int main() {
     check(controller->cinematic(owner,{5239,movie.registry,1,6,0},20),"controller accepts native opening start");
     check(controller->cinematic(owner,{1685,movie.registry,2,6,0},30),"controller accepts native opening end");
     check(controller->arrival(owner,4,40),"controller reaches the Underwatch landing");
-    check(entry.update(*controller,1,50,true).enabled,"Lua composition advances gameplay");
+    if(!entry.update(*controller,1,50,true).enabled) {
+        const auto d=controller->diagnostics();
+        std::fprintf(stderr,"executor phase=%u failure=%u active=%08X complete=%08X fault=%u\n",static_cast<unsigned>(d.phase),static_cast<unsigned>(d.failure),d.active,d.complete,controller->frame().fault?1U:0U);
+        const auto& g=controller->graph().definition;
+        for(std::size_t i=0;i<g.steps.size();++i) {const auto st=controller->step_state(i);std::fprintf(stderr,"step %zu %.*s phase=%u\n",i,static_cast<int>(g.steps[i].name.size()),g.steps[i].name.data(),static_cast<unsigned>(st.phase));}
+        check(false,"Lua composition advances gameplay");
+    }
     check(!controller->frame().fault,"crash-site graph has no rejected commands");
     check(controller->frame().section==static_cast<std::uint8_t>(m::Section::underwatch) && controller->frame().bubble==9,"gameplay starts in the Underwatch");
     check(controller->frame().presentation.published && controller->frame().presentation.event==m::kObjectives[0],"the first directive is published on arrival");
+    check(controller->frame().musicSection==m::music_section::underwatchRuins && m::music::section(controller->frame())==m::music_section::underwatchRuins,"the Underwatch score starts on landing");
     wire(controller->frame());
     receipts(*controller);
     auto frame=std::make_unique<m::Frame>(controller->frame());
@@ -233,7 +269,7 @@ int main() {
     controller->reset();check(!controller->frame().enabled && !controller->owner().valid(),"reset retires mission authority");
     check(controller->select(1,100) && controller->owner()!=owner,"replayed run gets a fresh authority generation");
     check(!controller->arrival(owner,1,110),"retired run receipts cannot activate new attempt");
-    cinematics();dialogue_rows();entrance();
+    cinematics();dialogue_rows();entrance();prologue_chain();
     std::printf("PASS: %u Homecoming launch identity, catalog, section graph, Lua entry, authority width, cinematic, dialogue, entrance and receipt checks\n",checks);
     return 0;
 }

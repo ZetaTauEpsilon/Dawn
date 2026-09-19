@@ -3,6 +3,7 @@
 #include "../../../../../state/activity/vanilla/one_au/runtime.h"
 #include "../../../../../state/activity/vanilla/homecoming/transit.h"
 #include "../../../../../state/activity/vanilla/homecoming/runtime.h"
+#include "../../../../../state/activity/vanilla/homecoming/prologue.h"
 #include "activity_keepalive_push.h"
 #include "../../../../../state/activity/gateway/runtime.h"
 #include "../../../../../state/activity/deadly_trial/runtime.h"
@@ -306,7 +307,7 @@ bool consume_activity_keepalive(Session& session,
                 || state::activity::strike_bond::publication_due(now)
                 || state::activity::strike_pact::publication_due(now)
                 || state::activity::hijacked::publication_due(now)
-                || (state::activity::newlight::launchpad::publication_due(now) || state::activity::newlight::launchpad::tower::active() || state::activity::gateway_intro::active())));
+                || (state::activity::newlight::launchpad::publication_due(now) || state::activity::newlight::launchpad::tower::active() || state::activity::gateway_intro::active() || state::activity::vanilla::homecoming::prologue::active())));
     if (session.activity.joinedForeignSession) {
         // This link exists only so the client's second activity instance sees traffic. A roster or
         // membership push on it leaves the transition running with no world entered.

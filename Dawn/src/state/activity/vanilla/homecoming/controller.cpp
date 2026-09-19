@@ -330,7 +330,8 @@ bool Controller::publish(const coo::Command& c) noexcept {
             default:return false;
             }
         }
-        switch(static_cast<Mechanic>(s.argument)) {
+        // Asset mechanics carry their kind in the low byte; the music section rides above it.
+        switch(static_cast<Mechanic>(s.argument&0xFFU)) {
         case Mechanic::arm:
             if(s.asset!=kReviveInteract) {return false;}
             frame_.reviveArmed=true;frame_.reviveUsed=false;++frame_.revision;return request(s.asset,true);
@@ -345,6 +346,11 @@ bool Controller::publish(const coo::Command& c) noexcept {
             ++n.generation;n.bound=false;n.retired=true;n.active=false;n.desired=false;++frame_.revision;return true;
         }
         case Mechanic::powerOff:return s.asset.type==23 && request(s.asset,true,0.F,0.F);
+        case Mechanic::music: {
+            const auto section=s.argument>>8;
+            if(s.asset!=kMusicAsset || (section!=music_section::none && section>=music_section::count)) {return false;}
+            frame_.musicSection=static_cast<std::uint8_t>(section);++frame_.revision;return true;
+        }
         default:return false;
         }
     case coo::Operation::observation:case coo::Operation::eventAfter:return true;

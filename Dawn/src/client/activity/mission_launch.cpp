@@ -14,6 +14,7 @@
 #include "../../state/activity/forced/activity_forced_destination.h"
 #include "../../state/activity/runtime.h"
 #include "../../state/activity/gateway_intro.h"
+#include "../../state/activity/vanilla/homecoming/prologue.h"
 #include "../../state/activity/destination/activity_destination_snapshot.h"
 #include "../../core/logging/log.h"
 
@@ -59,6 +60,15 @@ std::uint64_t now() noexcept {
 #endif
 }
 #include "gateway_intro_native.inl"
+namespace prologue = state::activity::vanilla::homecoming::prologue;
+/** @return True when the installed catalog carries the Tower cinematic activity and its scenario. */
+bool prologue_available() noexcept {
+    const auto rows = state::build_data::activities::entries();
+    state::build_data::scenarios::Definition approach{};
+    return rows.size() > static_cast<std::size_t>(prologue::kTowerCinematic)
+        && rows[prologue::kTowerCinematic].name() == prologue::kPackage
+        && state::build_data::find_scenario_layout(prologue::kPackage, approach) && approach.tag == prologue::kScenario;
+}
 void finish(Status status) noexcept {
     AcquireSRWLockExclusive(&g_lock);
     if (g_state.status == status) { ReleaseSRWLockExclusive(&g_lock); return; }
@@ -68,6 +78,7 @@ void finish(Status status) noexcept {
     ReleaseSRWLockExclusive(&g_lock);
     if (status != Status::queued && status != Status::arrived && status != Status::preparing && status != Status::cinematics) {
         if(intro::active()) intro::fail();
+        if(prologue::active()) prologue::fail();
         g_gatewayExit={};
     }
     std::array<char, 512> line{};
@@ -178,8 +189,19 @@ void poll() noexcept {
         if(!gateway_video_poll(base,currentStep)) {finish(Status::nativeUnavailable);return;}
         if(intro::wanted()<0) return;
     }
+    // The Red War opening: the Tower cinematic activity precedes Homecoming exactly like
+    // Gateway's briefing precedes its mission. Without the installed cinematic activity
+    // and scenario the mission launches directly.
+    const bool homecoming=state.index==prologue::kMission && state.opening
+        && (state.status==Status::cinematics || prologue_available());
+    if(homecoming && state.status==Status::cinematics) {
+        prologue::tick(now());
+        if(prologue::state().phase==prologue::Phase::failed) {finish(Status::timedOut);return;}
+        if(prologue::wanted()<0) return;
+    }
     if (state.status == Status::queued) {
-        if(gateway) gateway_depart(base,currentStep);
+        if(gateway) gateway_depart(base,currentStep,intro::kMission);
+        if(homecoming) gateway_depart(base,currentStep,prologue::kMission);
         g_leftOrbit = g_leftOrbit || currentStep != 29;
         if (g_leftOrbit && inMission && sessionId != g_previousSession && state.index < rows.size()) {
             const auto expectedName = state.manual ? destination_name(state.destination) : rows[state.index].name();
@@ -194,6 +216,7 @@ void poll() noexcept {
                         && actual.spawnSetOverride == (state.destination.hasSpawnSetHash
                             ? state.destination.spawnSetHash : forced::kAbsentSpawnSetHash)))));
             if(gateway && matches) intro::complete();
+            if(homecoming && matches) prologue::complete();
             finish(matches ? Status::arrived : Status::unexpectedDestination); return;
         }
         if (now() - started > 120000) { finish(Status::timedOut); }
@@ -226,7 +249,8 @@ void poll() noexcept {
     // Captured retail setup:orbit is 29. In-world exit/reclassification belongs to the native
     // activity lifecycle and is deliberately not synthesized by this UI request adapter.
     const bool departingBriefing=gateway && state.status==Status::cinematics && intro::wanted()==intro::kMission;
-    if (currentStep != 29 && !(departingBriefing && currentStep==38)) { finish(Status::returnToOrbit); return; }
+    const bool departingPrologue=homecoming && state.status==Status::cinematics && prologue::wanted()==prologue::kMission;
+    if (currentStep != 29 && !((departingBriefing || departingPrologue) && currentStep==38)) { finish(Status::returnToOrbit); return; }
     const auto world = resolve<World>(base,0xC03430,{0x40,0x56,0x48,0x83,0xEC,0x30,0x48,0x8B});
     const auto sessionReady = resolve<Ready>(base,0x1788810,{0x83,0xB9,0x6C,0x08,0x00,0x00,0x00,0x0F});
     const auto memberReady = resolve<Ready>(base,0x178D740,{0x4C,0x8B,0xC1,0x48,0x63,0x89,0x3C,0xE9});
@@ -256,6 +280,7 @@ void poll() noexcept {
         finish(Status::notReady); return;
     }
     const auto index = gateway ? (state.status==Status::cinematics ? intro::wanted() : intro::kIntroduction)
+        : homecoming ? (state.status==Status::cinematics ? prologue::wanted() : prologue::kTowerCinematic)
         : static_cast<std::int16_t>(state.index);
     std::array<char, 40> nativeName{};
     const auto package = reinterpret_cast<std::uintptr_t>(name(index));
@@ -278,7 +303,7 @@ void poll() noexcept {
         finish(now() - started > 10000 ? Status::prelaunchUnavailable : Status::preparing);
         return;
     }
-    if (!campaign_dialogue::select(gateway && index!=intro::kMission ? -1 : index)) {
+    if (!campaign_dialogue::select((gateway && index!=intro::kMission) || (homecoming && index!=prologue::kMission) ? -1 : index)) {
         finish(now()-started>10000 ? Status::prelaunchUnavailable : Status::preparing);
         return;
     }
@@ -291,8 +316,16 @@ void poll() noexcept {
         core::log::write(core::log::Channel::client,core::log::Level::info,line.data());
         finish(Status::cinematics);return;
     }
+    if(homecoming && index!=prologue::kMission) {
+        if(state.status!=Status::cinematics) {prologue::begin(now());forced::clear();}
+        if(!prologue::queued(index,now())) {finish(Status::descriptorRejected);return;}
+        clear();select(0,selection.data());commit(1);
+        std::array<char,96> line{};std::snprintf(line.data(),line.size(),"ev=homecoming stage=prologue_queued activity=%d",index);
+        core::log::write(core::log::Channel::client,core::log::Level::info,line.data());
+        finish(Status::cinematics);return;
+    }
     std::uint64_t departureNonce{};
-    if(departingBriefing) {
+    if(departingBriefing || departingPrologue) {
         if(!gateway_nonce(session,departureNonce)) return;
         std::memcpy(selection.data()+0x10,&departureNonce,sizeof departureNonce);
         if(!valid(selection.data())) {finish(Status::descriptorRejected);return;}
@@ -313,6 +346,11 @@ void poll() noexcept {
         g_gatewayExit={session,departureNonce,state::activity::mission_run_generation(),true};
         AcquireSRWLockExclusive(&g_lock);g_requestedAt=now();ReleaseSRWLockExclusive(&g_lock);
     }
+    if(departingPrologue) {
+        static_cast<void>(prologue::queued(index,now()));
+        g_gatewayExit={session,departureNonce,state::activity::mission_run_generation(),true};
+        AcquireSRWLockExclusive(&g_lock);g_requestedAt=now();ReleaseSRWLockExclusive(&g_lock);
+    }
     finish(Status::queued);
 }
 const char* description(Status status) noexcept {
@@ -322,7 +360,7 @@ const char* description(Status status) noexcept {
     case Status::queued: return "Launching the selected activity. Waiting for arrival.";
     case Status::arrived: return "In mission.";
     case Status::preparing: return "Preparing the mission opening...";
-    case Status::cinematics: return "Playing Gateway's opening cinematics...";
+    case Status::cinematics: return "Playing the opening cinematics...";
     case Status::prelaunchUnavailable: return "The mission opening could not be prepared. Wait in orbit and try again.";
     case Status::unexpectedDestination: return "The selected opening did not load. Return to orbit and try again.";
     case Status::catalogUnavailable: return "Activity catalog is still being extracted.";

@@ -19,7 +19,15 @@ constexpr std::uint8_t bubble_of(Section s) noexcept {
     default:return 8;
     }
 }
-enum class Mechanic : std::uint32_t { restrict=1,allow,finishSection,arm,disarm,stopScene,retireMember,powerOff,pickup,releaseDoor };
+enum class Mechanic : std::uint32_t { restrict=1,allow,finishSection,arm,disarm,stopScene,retireMember,powerOff,pickup,releaseDoor,music };
+// Bank 80B5090F authored sections (FNV-1 names recovered from the descriptor). The unnamed
+// ordinals between first_pod and battleship_deck follow the mission order; the two the
+// authored music volumes point at are used positionally and marked inferred.
+namespace music_section {
+inline constexpr std::uint8_t underwatchRuins=0,firstCabal=1,afterCayde=3,shaxxDoor=4,firstPod=6,
+    cabalShipReveal=7 /* inferred */,plazaCabalShip=8 /* inferred */,leavingPlaza=12,battleshipDeck=16,battleshipSabotage=17,run=18,ending=19,
+    count=20,none=0xFF;
+}
 // Observations the controller derives from several receipts rather than one asset.
 enum class Milestone : std::uint32_t { caydeNear=0x300,shaxxNear,consoleScanned,generatorA,generatorB,generatorC };
 // Type-4 observation arguments.
@@ -27,9 +35,9 @@ enum class ObjectEvent : std::uint32_t { present=1,used };
 // The dead Zavala interactable is the only native use subscription in this mission.
 inline constexpr auto kReviveInteract=asset(kPlaza,4,24),kConsoleLink=asset(kShip,65,166),kBazaarDoor=asset(kBoulevard,23,9);
 constexpr bool use_subscription(coo::Asset a) noexcept {return a==kReviveInteract;}
-enum class Cohort : std::uint8_t { underwatchCast,breachBackup,breachApproach,centurionRush,centurionBackup,heroMoment,postGun,
-    hallwayDestruction,overlookStart,gateStartClear,friendlies,fakeFight,frames,corridor,gateHangarClear,hangarFloor,
-    plazaInit,wave1,wave2,wave3,bazaarStart,bazaarMid,bazaarFar,bazaarEnd,bazaarAll,blasted,
+enum class Cohort : std::uint8_t { underwatchCast,breachBackup,breachApproach,centurionRush,centurionBackup,
+    hallwayDestruction,overlookStart,gateStartClear,friendlies,corridor,gateHangarClear,hangarFloor,
+    plazaInit,wave1,interim,wave2,wave3,bazaarStart,bazaarMid,bazaarFar,bazaarEnd,bazaarAll,
     pods,damaged,hall,stairs,deckA,deckB,hardpoints,boss,airlock,matrix,engineUpper,engineLower,generatorGuards,escape,count };
 struct Member {std::uint32_t registry;std::uint16_t slot;};
 struct CohortBinding {Cohort id;std::span<const Member> members;};
@@ -40,28 +48,28 @@ consteval auto cohort_members(const std::uint16_t (&slots)[N]) noexcept {
 }
 // Encounter membership is reconstruction policy (Sunrise v40 declarations). Native
 // source definitions still own category selection, placement and actor creation.
-inline constexpr auto kUnderwatchCast=cohort_members<kUnderwatch>({42,113,12,13,34,35,36,37,38,39,40,41,44,67});
+// Loose crash-site cast: the Red Guard, the fake fight and the wall-sitting civilians. Every
+// posed, reacting or running civilian is owned by its authored Scene; the standing civilian
+// (36) and the aiming guard (113) stood in the Cayde and armory doorways and are omitted.
+inline constexpr auto kUnderwatchCast=cohort_members<kUnderwatch>({42,12,13,37,38,39});
 inline constexpr auto kBreachBackup=cohort_members<kUnderwatch>({8,9});
 // Clearance only: the breach and Centurion actors are Scene-owned and never placed loosely.
 inline constexpr auto kBreachApproach=cohort_members<kUnderwatch>({6,8,9,20,22,23});
 inline constexpr auto kCenturionRush=cohort_members<kUnderwatch>({22});
 inline constexpr auto kCenturionBackup=cohort_members<kUnderwatch>({23});
-inline constexpr auto kHeroMoment=cohort_members<kUnderwatch>({65,66});
-inline constexpr auto kPostGun=cohort_members<kUnderwatch>({112,114,115});
 inline constexpr auto kHallwayDestruction=cohort_members<kMilitary>({4});
 inline constexpr auto kOverlookStart=cohort_members<kMilitary>({5,6,7,8,11});
 // The overlook fight with the allied frames (source 7) does not gate the first door.
 inline constexpr auto kGateStartClear=cohort_members<kMilitary>({4,5,6,8,11});
 inline constexpr auto kFriendlies=cohort_members<kMilitary>({32,33});
-inline constexpr auto kFakeFight=cohort_members<kMilitary>({66,67,68});
-inline constexpr auto kFrames=cohort_members<kMilitary>({69,71,73,75,76});
 // Source 17's authored point spawns outside the corridor walls; its three Legionaries are
 // requested through source 13's point instead (count vector 1/3/2), plus the sniper.
 inline constexpr auto kCorridor=cohort_members<kMilitary>({13,18});
 inline constexpr auto kGateHangarClear=cohort_members<kMilitary>({13,18});
 inline constexpr auto kHangarFloor=cohort_members<kMilitary>({19,24,26,30,34,36,38});
 inline constexpr auto kPlazaInit=cohort_members<kPlaza>({12,13,27});
-inline constexpr auto kWave1=cohort_members<kPlaza>({28,29,40,41});
+inline constexpr auto kWave1=cohort_members<kPlaza>({28,29});
+inline constexpr auto kInterim=cohort_members<kPlaza>({40,41});
 inline constexpr auto kWave2=cohort_members<kPlaza>({31,33,34,35});
 inline constexpr auto kWave3=cohort_members<kPlaza>({36,37,38,39});
 inline constexpr auto kBazaarStart=cohort_members<kBoulevard>({6,11,8});
@@ -69,7 +77,6 @@ inline constexpr auto kBazaarMid=cohort_members<kBoulevard>({7,4});
 inline constexpr auto kBazaarFar=cohort_members<kBoulevard>({3});
 inline constexpr auto kBazaarEnd=cohort_members<kBoulevard>({5,2});
 inline constexpr auto kBazaarAll=cohort_members<kBoulevard>({6,11,8,7,4,3,5,2});
-inline constexpr auto kBlasted=cohort_members<kBoulevard>({19,20,21,22});
 inline constexpr auto kPods=cohort_members<kShip>({4});
 inline constexpr auto kDamaged=cohort_members<kShip>({5});
 inline constexpr auto kHall=cohort_members<kShip>({6,7,8,9});
@@ -86,13 +93,13 @@ inline constexpr auto kGeneratorGuards=cohort_members<kShip>({50,51,52});
 inline constexpr auto kEscape=cohort_members<kShip>({54,55});
 inline constexpr CohortBinding kCohorts[]{
     {Cohort::underwatchCast,kUnderwatchCast},{Cohort::breachBackup,kBreachBackup},{Cohort::breachApproach,kBreachApproach},
-    {Cohort::centurionRush,kCenturionRush},{Cohort::centurionBackup,kCenturionBackup},{Cohort::heroMoment,kHeroMoment},{Cohort::postGun,kPostGun},
+    {Cohort::centurionRush,kCenturionRush},{Cohort::centurionBackup,kCenturionBackup},
     {Cohort::hallwayDestruction,kHallwayDestruction},{Cohort::overlookStart,kOverlookStart},{Cohort::gateStartClear,kGateStartClear},
-    {Cohort::friendlies,kFriendlies},{Cohort::fakeFight,kFakeFight},{Cohort::frames,kFrames},{Cohort::corridor,kCorridor},
+    {Cohort::friendlies,kFriendlies},{Cohort::corridor,kCorridor},
     {Cohort::gateHangarClear,kGateHangarClear},{Cohort::hangarFloor,kHangarFloor},
-    {Cohort::plazaInit,kPlazaInit},{Cohort::wave1,kWave1},{Cohort::wave2,kWave2},{Cohort::wave3,kWave3},
+    {Cohort::plazaInit,kPlazaInit},{Cohort::wave1,kWave1},{Cohort::interim,kInterim},{Cohort::wave2,kWave2},{Cohort::wave3,kWave3},
     {Cohort::bazaarStart,kBazaarStart},{Cohort::bazaarMid,kBazaarMid},{Cohort::bazaarFar,kBazaarFar},{Cohort::bazaarEnd,kBazaarEnd},
-    {Cohort::bazaarAll,kBazaarAll},{Cohort::blasted,kBlasted},
+    {Cohort::bazaarAll,kBazaarAll},
     {Cohort::pods,kPods},{Cohort::damaged,kDamaged},{Cohort::hall,kHall},{Cohort::stairs,kStairs},{Cohort::deckA,kDeckA},{Cohort::deckB,kDeckB},
     {Cohort::hardpoints,kHardpoints},{Cohort::boss,kBoss},{Cohort::airlock,kAirlock},{Cohort::matrix,kMatrix},
     {Cohort::engineUpper,kEngineUpper},{Cohort::engineLower,kEngineLower},{Cohort::generatorGuards,kGeneratorGuards},{Cohort::escape,kEscape}

@@ -12,6 +12,9 @@
 #include "../../hooks/camera/clean_view.h"
 #include "../../input/window_focus.h"
 
+// Reuse the vendored Win32 backend's translation, including layout-dependent scan codes.
+ImGuiKey ImGui_ImplWin32_KeyEventToImGuiKey(WPARAM word, LPARAM value);
+
 namespace dawn::client::ui::camera {
 namespace {
 namespace settings = client::camera;
@@ -24,7 +27,19 @@ bool g_reservedKey{};
 [[nodiscard]] settings::KeyboardState keyboard() noexcept {
     settings::KeyboardState result{};
     for (int key = 8; key <= 254; ++key) {
-        result[static_cast<std::size_t>(key)] = (GetAsyncKeyState(key) & 0x8000) != 0;
+        const UINT scan = MapVirtualKeyW(static_cast<UINT>(key), MAPVK_VK_TO_VSC_EX);
+        const LPARAM flags = static_cast<LPARAM>(((scan & 0xFFU) << 16)
+            | ((scan & 0xFF00U) != 0 ? 1U << 24 : 0));
+        const auto named = ImGui_ImplWin32_KeyEventToImGuiKey(static_cast<WPARAM>(key), flags);
+        // ImGui queues key-down and key-up separately, so a tap between rendered frames
+        // remains visible to the picker even after GetAsyncKeyState reports it released.
+        // Only keys not represented by the backend need the old polling fallback.
+        result[static_cast<std::size_t>(key)] = named != ImGuiKey_None
+            ? ImGui::IsKeyDown(named) : (GetAsyncKeyState(key) & 0x8000) != 0;
+        if (key == VK_RETURN) {
+            // Windows uses one virtual key for the main and keypad Enter keys.
+            result[VK_RETURN] = result[VK_RETURN] || ImGui::IsKeyDown(ImGuiKey_KeypadEnter);
+        }
     }
     return result;
 }
@@ -33,6 +48,10 @@ bool g_reservedKey{};
     std::array<char, 64> result{};
     if (key == 0) {
         (void)std::snprintf(result.data(), result.size(), "Unbound");
+        return result;
+    }
+    if (key >= VK_F1 && key <= VK_F24) {
+        (void)std::snprintf(result.data(), result.size(), "F%u", static_cast<unsigned>(key - VK_F1 + 1));
         return result;
     }
     const UINT scan = MapVirtualKeyW(key, MAPVK_VK_TO_VSC_EX);

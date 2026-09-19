@@ -17,6 +17,8 @@ feature follows the character; detached drone movement is not implemented.
 All four keys are rebindable in **Camera > Key bindings**. Click a key, then press
 a new keyboard key. Escape cancels; Backspace unbinds. A key already used by
 another camera action swaps the two bindings. The Dawn menu key is reserved.
+Function keys F1-F24 are supported. The picker reads the menu's queued keyboard
+state, preserving short taps even when a press and release occur between frames.
 **Reset key bindings** restores F5/F6/F7/F8 without changing the selected mode.
 Use **Normal** in the menu to select the ordinary view directly.
 
@@ -97,6 +99,8 @@ $msbuild = 'C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\MSBuild
 & $msbuild Dawn/Dawn.vcxproj -p:Configuration=Release -p:Platform=x64 -p:PreferredToolArchitecture=x64 -m:4 -v:minimal -nologo
 & $msbuild Dawn/unit/camera_toggle_tests.vcxproj -p:Configuration=Release -p:Platform=x64 -p:PreferredToolArchitecture=x64 -v:minimal -nologo
 & ./build/unit/camera_toggle/Release/camera_toggle_tests.exe
+& $msbuild Dawn/unit/camera_input_tests.vcxproj -p:Configuration=Release -p:Platform=x64 -p:PreferredToolArchitecture=x64 -v:minimal -nologo
+& ./build/unit/camera_input/Release/camera_input_tests.exe
 ```
 
 The [unit suite](../Dawn/unit/camera_toggle_tests.cpp) runs 1,811 checks covering
@@ -106,6 +110,11 @@ filtering, and all 256 visibility masks with native updates while hidden. It als
 checks each rebindable action, duplicate-key swaps, capture cancellation and
 clearing, held keys during rebind, legacy/malformed settings, persistence across
 reload, default restoration, and preservation after a failed settings write. The
+[headless Camera page suite](../Dawn/unit/camera_input_tests.cpp) adds 237 checks
+using the production picker and ImGui event queue. It reproduces a fast F3 tap
+lost by the old asynchronous polling, covers F1-F24 on every action, verifies
+saved bindings, and checks ordinary/keypad keys, cancellation, clearing, focus,
+menu closure, and page changes. It creates no window and sends no real input. The
 [read-only verifier](../tools/re/verify_camera_modes.py) checks 56 native bindings;
 see the reference for snapshot and live-process commands. Neither test replaces
 an in-game visual check.

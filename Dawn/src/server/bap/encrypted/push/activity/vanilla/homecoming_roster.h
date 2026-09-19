@@ -1,6 +1,6 @@
 #pragma once
 #include <algorithm>
-#include "../../../../../../state/activity/vanilla/homecoming/native_catalog.h"
+#include "../../../../../../state/activity/vanilla/homecoming/mission.h"
 #include "../../../../../../state/activity/vanilla/homecoming/cinematics.h"
 #include "../../../../../../state/build_data/scenarios/definition.h"
 #include "../../../../../../middleware/bap/activity_message/sensor_auth_update.h"
@@ -32,6 +32,10 @@ inline constexpr std::uint8_t kBubbleCount=10;
 // sequences, objects, devices, Scenes and the console link remain registered.
 inline constexpr bool required(const native::Group& group) noexcept {
     if(group.topLevel) {return true;}
+    // The plaza areas registry (bubble 6, second registry array, explicit slice) has no
+    // scenario-cache record and the mission publishes none of its slots: its triggers are
+    // sampled as volumes and its fake-shield Scene and hazards stay native.
+    if(group.key==native::kPlazaAreas) {return false;}
     for(const auto& slot:group.slots) {switch(slot.asset.type) {case 1:case 2:case 3:case 4:case 5:case 23:case 43:case 65:return true;}}return false;
 }
 inline constexpr std::size_t kRequiredGroups=[] { std::size_t n{};for(const auto& g:native::kGroups) { if(required(g)) { ++n; } }return n; }();

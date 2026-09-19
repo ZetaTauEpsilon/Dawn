@@ -6,6 +6,7 @@
 #include "state/activity/vanilla/homecoming/door_native.h"
 #include "state/activity/vanilla/homecoming/console_scan.h"
 #include "state/activity/vanilla/homecoming/registries.h"
+#include "server/bap/encrypted/push/activity/vanilla/homecoming_roster.h"
 #include "client/activity/campaign_openings.h"
 #include "middleware/encoding/bit_writer.h"
 #include "middleware/encoding/bit_reader.h"
@@ -44,9 +45,15 @@ static void catalog() {
     check(std::size(m::kDialogue)==94 && std::size(m::kObjectives)==16 && m::kSpawns.size()==168,"catalog sizes from the Towerfall extraction");
     check(m::registries::required(m::kScenario,0x80B50746U,m::kPlaza,1ULL<<6),"plaza registry is admitted through the catalog hook");
     check(!m::registries::required(m::kScenario,0x80B50746U,m::kPlaza,1ULL<<5) && !m::registries::required(0,0x80B50746U,m::kPlaza,1ULL<<6),"catalog hook is exact");
+    namespace roster=dawn::server::bap::encrypted::push::activity::homecoming_roster;
     for(const auto& g:m::kGroups) {
         for(const auto& s:g.slots) {check(m::asset_index(s.asset)<std::size(m::kAssets),"every group slot is a catalog asset");}
+        // A required group must resolve from the scenario cache: an ordinary cache ordinal or the
+        // mission catalog hook. Groups without either (plaza areas) must stay out of the roster.
+        check(!roster::required(g) || g.topLevel || g.hint!=0 || m::registries::required(m::kScenario,g.tag,g.key,1ULL<<g.bubble),
+            "every required roster group has a scenario cache record or the catalog hook");
     }
+    check(roster::required(m::kGroups[std::size(m::kGroups)-2]) && !roster::required(m::kGroups[std::size(m::kGroups)-1]),"the plaza registry is admitted and the plaza areas registry is not");
     for(std::size_t i=0;i<m::kSpawns.size();++i) {
         const auto& p=m::kSpawns[i];
         check(m::spawn_index(m::asset(p.registry,1,p.source))==i,"spawn rows index by source asset");

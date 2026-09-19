@@ -304,6 +304,10 @@
     <ClCompile Include="src\client\content\activity\activity_catalog_build.cpp" />
     <ClCompile Include="src\state\build_data\activities\activity_catalog.cpp" />
     <ClCompile Include="src\client\ui\forest\forest_panel.cpp" />
+    <ClCompile Include="src\client\camera\camera_settings.cpp" />
+    <ClCompile Include="src\client\hooks\camera\third_person.cpp" />
+    <ClCompile Include="src\client\hooks\camera\clean_view.cpp" />
+    <ClCompile Include="src\client\ui\camera\camera_panel.cpp" />
     <ClCompile Include="src\client\ui\movement\movement_panel.cpp" />
     <ClCompile Include="src\client\movement\movement_settings_store.cpp" />
     <ClCompile Include="src\client\ui\player\player_panel.cpp" />
@@ -974,6 +978,13 @@
     <ClInclude Include="src\client\input\window_focus.h" />
     <ClInclude Include="src\client\hooks\teleport\internal.h" />
     <ClInclude Include="src\client\hooks\teleport\runtime.h" />
+    <ClInclude Include="src\client\camera\camera_settings.h" />
+    <ClInclude Include="src\client\camera\key_bindings.h" />
+    <ClInclude Include="src\client\camera\settings_codec.h" />
+    <ClInclude Include="src\client\hooks\camera\policy.h" />
+    <ClInclude Include="src\client\hooks\camera\runtime.h" />
+    <ClInclude Include="src\client\hooks\camera\clean_view.h" />
+    <ClInclude Include="src\client\ui\camera\camera_panel.h" />
     <ClInclude Include="src\client\ui\movement\movement_panel.h" />
     <ClInclude Include="src\client\runtime\internal.h" />
     <ClInclude Include="src\client\runtime\host\game_host_classification.h" />

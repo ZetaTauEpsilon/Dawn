@@ -96,6 +96,7 @@ namespace dawn::core::ui::layout::credits { void request_open() noexcept {} }
 namespace dawn::core::log { void write(Channel, Level, std::string_view) noexcept {} }
 namespace dawn::client::ui::movement { void draw() noexcept { dummy_page(); } }
 namespace dawn::client::ui::player { void draw() noexcept { dummy_page(); } }
+namespace dawn::client::ui::camera { void draw() noexcept { dummy_page(); } }
 namespace dawn::state::build_data {
 bool scenario_layouts_ready() noexcept { return !g_missingContent; }
 bool spawn_sets_ready() noexcept { return !g_missingContent && g_spawnPublished; }
@@ -187,8 +188,11 @@ int main(int argc, char** argv) {
     ui::theme::apply();
     check(client::ui::runtime::initialize(), "production client navigation");
     const auto registered = ui::modules::registry::snapshot();
-    check(registered.entries().size() == 3 && registered.entries().front().stable_id() == "client.mission_launch",
+    check(registered.entries().size() == 4 && registered.entries().front().stable_id() == "client.mission_launch",
         "campaigns are the default and Forest is not registered");
+    check(std::any_of(registered.entries().begin(), registered.entries().end(), [](const auto& item) {
+        return item.stable_id() == "client.camera" && item.display_name() == "Camera";
+    }), "camera page registered alongside campaigns");
     for (const auto& item : registered.entries()) { check(item.display_name() != "Forest", "Forest tab removed"); }
     ui::modules::registry::PageRegistration activity, hud, logs;
     check(activity.acquire(ui::modules::Owner::server, "server.activity", "Activity", dummy_page), "activity page");

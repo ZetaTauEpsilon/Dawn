@@ -1,0 +1,346 @@
+{
+  "build": "86657.20.08.23.1800.d2_rc",
+  "verified_at_utc": "2026-09-19T17:01:26.009521+00:00",
+  "scope": "Read-only native code and data bindings; no gameplay or input-isolation acceptance",
+  "passed": true,
+  "check_count": 56,
+  "checks": [
+    {
+      "name": "executable_sha256",
+      "passed": true,
+      "actual": "81964380664e7fcee3c620085a157fdeaf91fefacf7214907820f188bbeb4ced",
+      "expected": "81964380664e7fcee3c620085a157fdeaf91fefacf7214907820f188bbeb4ced"
+    },
+    {
+      "name": "weapon_stage_submit",
+      "passed": true,
+      "actual": "4c8bdc55535641554157498dab58f2ffff4881ec800e0000",
+      "expected": "4c8bdc55535641554157498dab58f2ffff4881ec800e0000"
+    },
+    {
+      "name": "weapon_stage_empty_branch",
+      "passed": true,
+      "actual": "4032f68b810c0600004c8bf94c63ea440fa3e844884c24414c8944245848895c24500f83e5070000",
+      "expected": "4032f68b810c0600004c8bf94c63ea440fa3e844884c24414c8944245848895c24500f83e5070000"
+    },
+    {
+      "name": "weapon_stage_empty_returns_false",
+      "passed": true,
+      "actual": "400fb6c6ebdc",
+      "expected": "400fb6c6ebdc"
+    },
+    {
+      "name": "weapon_record_required_by_world_stage",
+      "passed": true,
+      "actual": "e824e20000488b4b288d5704897c243041b10148897c24284533c0c744242000000002e801e20000",
+      "expected": "e824e20000488b4b288d5704897c243041b10148897c24284533c0c744242000000002e801e20000"
+    },
+    {
+      "name": "weapon_record_type_lookup",
+      "passed": true,
+      "actual": "8b810806000083e80283f802761148ffc24881c1d02b0000493bd07ce3eb034c8bc9",
+      "expected": "8b810806000083e80283f802761148ffc24881c1d02b0000493bd07ce3eb034c8bc9"
+    },
+    {
+      "name": "ui_packet_producer",
+      "passed": true,
+      "actual": "4055565741544156488dac24a0d1ffffb8602f0000",
+      "expected": "4055565741544156488dac24a0d1ffffb8602f0000"
+    },
+    {
+      "name": "ui_prepared_type_and_frame",
+      "passed": true,
+      "actual": "83bb08060000077512488b8b880a0000e881060000488bcb41ffd6",
+      "expected": "83bb08060000077512488b8b880a0000e881060000488bcb41ffd6"
+    },
+    {
+      "name": "ui_packet_frame_owner",
+      "passed": true,
+      "actual": "488b86880a0000",
+      "expected": "488b86880a0000"
+    },
+    {
+      "name": "ui_packet_native_empty_output",
+      "passed": true,
+      "actual": "4c89a0186f03004c89a7b8000000",
+      "expected": "4c89a0186f03004c89a7b8000000"
+    },
+    {
+      "name": "ui_packet_consumer_accepts_null",
+      "passed": true,
+      "actual": "488bb7186f03004885f67444",
+      "expected": "488bb7186f03004885f67444"
+    },
+    {
+      "name": "clean_view_builder",
+      "passed": true,
+      "actual": "48895c240848896c2410488974241848897c242041564883ec40498bd9418bf8488bf2488be9",
+      "expected": "48895c240848896c2410488974241848897c242041564883ec40498bd9418bf8488bf2488be9"
+    },
+    {
+      "name": "model_visibility_inheritance",
+      "passed": true,
+      "actual": "8bc283f9ff746083f8ff745b8bd181e1ff1f0000",
+      "expected": "8bc283f9ff746083f8ff745b8bd181e1ff1f0000"
+    },
+    {
+      "name": "model_visibility_setter",
+      "passed": true,
+      "actual": "8bc24522c1c1f80d81e2ff1f0000448bd04981ca0000fc0f0fb7c049c1ea124c23d0",
+      "expected": "8bc24522c1c1f80d81e2ff1f0000448bd04981ca0000fc0f0fb7c049c1ea124c23d0"
+    },
+    {
+      "name": "render_mask_and_bvh_layout",
+      "passed": true,
+      "actual": "410faf52308bc249034208450fb6d141f6d2442250540fbe5052450ad04488505483ea01740e83fa02753e4881c1e0000000eb1ff30f1048400f57c00f2ec87a0b75094881c1b0000000eb074881c1c80000004885c974110fb74050488b490848c1e0064488540834",
+      "expected": "410faf52308bc249034208450fb6d141f6d2442250540fbe5052450ad04488505483ea01740e83fa02753e4881c1e0000000eb1ff30f1048400f57c00f2ec87a0b75094881c1b0000000eb074881c1c80000004885c974110fb74050488b490848c1e0064488540834"
+    },
+    {
+      "name": "hud_view_link",
+      "passed": true,
+      "actual": "488b44247048898828050000488b442438488905b371c801",
+      "expected": "488b44247048898828050000488b442438488905b371c801"
+    },
+    {
+      "name": "weapon_view_link",
+      "passed": true,
+      "actual": "488d051aa0c8010fbaf10a488905e79fc801",
+      "expected": "488d051aa0c8010fbaf10a488905e79fc801"
+    },
+    {
+      "name": "render_proxy_target",
+      "passed": true,
+      "actual": "8b5004",
+      "expected": "8b5004"
+    },
+    {
+      "name": "actor_identity_parent",
+      "passed": true,
+      "actual": "8b410c89028b413c83f8ff",
+      "expected": "8b410c89028b413c83f8ff"
+    },
+    {
+      "name": "following_camera_update",
+      "passed": true,
+      "actual": "40555341554156488dac2488feffff4881ec78020000440f29842420020000",
+      "expected": "40555341554156488dac2488feffff4881ec78020000440f29842420020000"
+    },
+    {
+      "name": "following_output_orientation",
+      "passed": true,
+      "actual": "498d4e3c498d5e48",
+      "expected": "498d4e3c498d5e48"
+    },
+    {
+      "name": "native_offset_placement",
+      "passed": true,
+      "actual": "4c8d8598090000488d8d60090000",
+      "expected": "4c8d8598090000488d8d60090000"
+    },
+    {
+      "name": "get_director",
+      "passed": true,
+      "actual": "48895c2408574883ec20488b1d5ff4c901",
+      "expected": "48895c2408574883ec20488b1d5ff4c901"
+    },
+    {
+      "name": "select_director",
+      "passed": true,
+      "actual": "48895c2410574883ec204863fa488d15bc6dd7fe4863d98b8cba70962801",
+      "expected": "48895c2410574883ec204863fa488d15bc6dd7fe4863d98b8cba70962801"
+    },
+    {
+      "name": "select_camera",
+      "passed": true,
+      "actual": "44884c24208954241048894c2408535557415441554883ec50488b4110488d5910",
+      "expected": "44884c24208954241048894c2408535557415441554883ec50488b4110488d5910"
+    },
+    {
+      "name": "gameplay_first_person_request",
+      "passed": true,
+      "actual": "ba04000000e9a5000000",
+      "expected": "ba04000000e9a5000000"
+    },
+    {
+      "name": "debug_director_constructor",
+      "passed": true,
+      "actual": "48895c24104889742420574883ec20418bf08bfa488bd9",
+      "expected": "48895c24104889742420574883ec20418bf08bfa488bd9"
+    },
+    {
+      "name": "flying_camera_constructor",
+      "passed": true,
+      "actual": "48895c24184889742420574883ec40",
+      "expected": "48895c24184889742420574883ec40"
+    },
+    {
+      "name": "flying_camera_update",
+      "passed": true,
+      "actual": "4c8bdc55564157498dabf8feffff4881ecf0010000",
+      "expected": "4c8bdc55564157498dabf8feffff4881ecf0010000"
+    },
+    {
+      "name": "flying_camera_initial_pose",
+      "passed": true,
+      "actual": "488bd3488d4c2420e8eb6c0eff0f28442420488d5328488d4f700f114760e8d5410eff",
+      "expected": "488bd3488d4c2420e8eb6c0eff0f28442420488d5328488d4f700f114760e8d5410eff"
+    },
+    {
+      "name": "camera_0_following_name",
+      "passed": true,
+      "actual": "666f6c6c6f77696e6700",
+      "expected": "666f6c6c6f77696e6700"
+    },
+    {
+      "name": "camera_0_following_case",
+      "passed": true,
+      "actual": 19460854,
+      "expected": 19460854
+    },
+    {
+      "name": "camera_0_following_constructor_call",
+      "passed": true,
+      "actual": 19404176,
+      "expected": 19404176
+    },
+    {
+      "name": "camera_0_following_vtable_opcode",
+      "passed": true,
+      "actual": "488d05",
+      "expected": "488d05"
+    },
+    {
+      "name": "camera_0_following_vtable",
+      "passed": true,
+      "actual": 29885392,
+      "expected": 29885392
+    },
+    {
+      "name": "camera_1_orbiting_name",
+      "passed": true,
+      "actual": "6f72626974696e6700",
+      "expected": "6f72626974696e6700"
+    },
+    {
+      "name": "camera_1_orbiting_case",
+      "passed": true,
+      "actual": 19460907,
+      "expected": 19460907
+    },
+    {
+      "name": "camera_1_orbiting_constructor_call",
+      "passed": true,
+      "actual": 19731984,
+      "expected": 19731984
+    },
+    {
+      "name": "camera_2_flying_name",
+      "passed": true,
+      "actual": "666c79696e6700",
+      "expected": "666c79696e6700"
+    },
+    {
+      "name": "camera_2_flying_case",
+      "passed": true,
+      "actual": 19460949,
+      "expected": 19460949
+    },
+    {
+      "name": "camera_2_flying_constructor_call",
+      "passed": true,
+      "actual": 19403888,
+      "expected": 19403888
+    },
+    {
+      "name": "camera_2_flying_vtable_opcode",
+      "passed": true,
+      "actual": "488d05",
+      "expected": "488d05"
+    },
+    {
+      "name": "camera_2_flying_vtable",
+      "passed": true,
+      "actual": 29886560,
+      "expected": 29886560
+    },
+    {
+      "name": "camera_4_first_person_name",
+      "passed": true,
+      "actual": "666972737420706572736f6e00",
+      "expected": "666972737420706572736f6e00"
+    },
+    {
+      "name": "camera_4_first_person_case",
+      "passed": true,
+      "actual": 19461012,
+      "expected": 19461012
+    },
+    {
+      "name": "camera_4_first_person_constructor_call",
+      "passed": true,
+      "actual": 19403808,
+      "expected": 19403808
+    },
+    {
+      "name": "camera_4_first_person_vtable_opcode",
+      "passed": true,
+      "actual": "488d05",
+      "expected": "488d05"
+    },
+    {
+      "name": "camera_4_first_person_vtable",
+      "passed": true,
+      "actual": 29885576,
+      "expected": 29885576
+    },
+    {
+      "name": "director_0_gameplay_case",
+      "passed": true,
+      "actual": 19436115,
+      "expected": 19436115
+    },
+    {
+      "name": "director_0_gameplay_constructor",
+      "passed": true,
+      "actual": 19404240,
+      "expected": 19404240
+    },
+    {
+      "name": "director_3_debug_case",
+      "passed": true,
+      "actual": 19436146,
+      "expected": 19436146
+    },
+    {
+      "name": "director_3_debug_constructor",
+      "passed": true,
+      "actual": 19403152,
+      "expected": 19403152
+    },
+    {
+      "name": "flying_update_vtable_slot",
+      "passed": true,
+      "actual": 19478416,
+      "expected": 19478416
+    },
+    {
+      "name": "following_update_vtable_slot",
+      "passed": true,
+      "actual": 19481856,
+      "expected": 19481856
+    },
+    {
+      "name": "debug_update_vtable_slot",
+      "passed": true,
+      "actual": 19471536,
+      "expected": 19471536
+    },
+    {
+      "name": "gameplay_update_vtable_slot",
+      "passed": true,
+      "actual": 19485888,
+      "expected": 19485888
+    }
+  ],
+  "source": "mapped_section_snapshot"
+}

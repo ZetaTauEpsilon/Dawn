@@ -125,9 +125,10 @@ Look for `ev=camera` in `Dawn/logs/dawn.log`: `stage=install`, `stage=mode`,
 markers `camera_only_models`, `camera_only_weapon`, and `camera_only_hud` each
 record `view_chain=preserved`.
 
-Rear third person and the corrected F9 renderer were user-confirmed in gameplay.
-Front-view behavior and the later Homecoming owner correction still need separate
-gameplay confirmation on v0.1.5. Check mode cycling/direct keys, F8 on/off in each mode,
+The Camera menu and function-key rebinding were user-confirmed on v0.1.5 on
+2026-09-19. Rear third person and the view-preserving HUD/model renderer were
+also confirmed in earlier gameplay checks. Dedicated front-view and Homecoming
+checks are still outstanding. Check mode cycling/direct keys, F8 on/off in each mode,
 aiming and wall collision, weapon swaps, other actors remaining visible,
 death/respawn, cinematic handoff, and destination changes including Homecoming.
 Rebind each action, restart, and check that the chosen keys remain selected.

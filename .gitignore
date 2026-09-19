@@ -46,6 +46,7 @@
 /Dawn/settings.json
 /Dawn/hud.json
 /Dawn/movement.json
+/Dawn/camera.json
 /Dawn/player.json
 __pycache__/
 *.py[cod]

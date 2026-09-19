@@ -17,6 +17,7 @@
 #include "graphics_renderer_report.h"
 #include "state.h"
 #include "../../../ui/mission_launch/mission_launch_art.h"
+#include "../../../camera/camera_settings.h"
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND window,
                                                              UINT message,
@@ -145,7 +146,7 @@ void render_frame_locked() noexcept {
     // A hidden surface still draws until its close animation ends, so the layout decides. The
     // HUD, running-work and notice overlays draw whether the surface is open or not. The HUD
     // goes first, so the surface stays above it when the two meet.
-    const bool hudDrawn = core::ui::hud::draw(visibility.enabled);
+    const bool hudDrawn = core::ui::hud::draw(visibility.enabled && !client::camera::camera_only());
     const bool surfaceDrawn = core::ui::layout::render(visibility.visible);
     const bool busyDrawn = core::ui::busy::draw();
     const bool noticeDrawn = core::ui::notice::draw();

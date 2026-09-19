@@ -1,4 +1,6 @@
 #include "../../core/logging/log.h"
+#include "../camera/camera_settings.h"
+#include "../hooks/camera/runtime.h"
 #include "../content/investment/worker.h"
 #include "../hooks/assert_handler/assert_handler_lifecycle.h"
 #include "../hooks/bitmap/bitmap_hook_lifecycle.h"
@@ -28,6 +30,7 @@ namespace dawn::client {
 bool initialize(void* module) noexcept {
     // Loaded before the pages register, so each page draws saved values on its first frame.
     movement::initialize(module);
+    camera::initialize(module);
     player::initialize(module);
     return ui::runtime::initialize();
 }
@@ -58,11 +61,16 @@ bool shutdown() noexcept {
     }
     // The camera hook produces the directive/world-step sample. Close its consumers first, then
     // remove that producer while every dependency it calls is still live.
+    hooks::camera::quiesce();
     hooks::teleport::quiesce();
     if (!hooks::teleport::uninstall()) {
         core::log::write(core::log::Channel::client,
                          core::log::Level::error,
                          "ev=shutdown stage=teleport_hooks result=deferred");
+        ReleaseSRWLockExclusive(&runtime::g_lock);
+        return false;
+    }
+    if (!hooks::camera::uninstall()) {
         ReleaseSRWLockExclusive(&runtime::g_lock);
         return false;
     }
@@ -120,6 +128,7 @@ bool shutdown() noexcept {
     runtime::g_platformStage = runtime::StageState::pending;
     ui::runtime::shutdown();
     player::shutdown();
+    camera::shutdown();
     movement::shutdown();
     core::log::write(core::log::Channel::client, core::log::Level::info, "ev=shutdown result=ok");
     ReleaseSRWLockExclusive(&runtime::g_lock);

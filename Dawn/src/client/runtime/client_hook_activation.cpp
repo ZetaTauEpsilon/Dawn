@@ -15,6 +15,7 @@
 #include "../hooks/assert_handler/assert_handler_lifecycle.h"
 #include "../hooks/bitmap/bitmap_hook_lifecycle.h"
 #include "../hooks/bootflow/bootflow_hook_lifecycle.h"
+#include "../hooks/camera/runtime.h"
 #include "../hooks/config_getter/config_getter_lifecycle.h"
 #include "../hooks/cursor/runtime.h"
 #include "../hooks/graphics/graphics_hook_lifecycle.h"
@@ -168,7 +169,9 @@ void clear_game_targets() noexcept {
     (void)hooks::bootflow::install();
     // The teleport hooks attach whether or not the feature is on, so the interface can enable it
     // without a restart. Both replacements return immediately while nothing is requested.
-    (void)hooks::teleport::install();
+    if (hooks::teleport::install()) {
+        (void)hooks::camera::install();
+    }
     // Noclip owns its Havok-step target, so a patch-specific miss cannot disable teleport.
     (void)hooks::noclip::install();
     // Attaches whether or not the feature is on, so the interface can enable it without a restart.

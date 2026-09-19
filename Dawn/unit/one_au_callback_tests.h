@@ -62,6 +62,10 @@ EntranceRequest entrance_request() noexcept {
     ++entrance_callback_test::requests;return entrance_callback_test::wanted;
 }
 }
+namespace dawn::state::activity::vanilla::homecoming {
+// The shared device tick also runs the Homecoming repair; it stays inactive here.
+EntranceRequest entrance_request() noexcept { return {}; }
+}
 namespace dawn::core::log {
 void write(Channel,Level,std::string_view) noexcept {}
 void writef(Channel,Level,const char* format,...) noexcept {

@@ -13,7 +13,7 @@ import native_test_inputs
 ROOT = verify.ROOT
 DEFAULT_OUT = ROOT / ("build/coo/validation-lua-" + datetime.now().strftime("%Y%m%d-%H%M%S"))
 TESTS = (
-    "coo_lua_tests", "deadly_trial_tests", "coo_mission_script_tests",
+    "coo_lua_tests", "deadly_trial_tests", "coo_mission_script_tests", "homecoming_tests",
     "coo_script_tests", "coo_universal_services_tests", "coo_executor_tests",
     "coo_shared_tests", "gateway_opening_tests", "player_position_tests",
     "coo_opening_tests", "coo_forest_tests", "coo_forest_runtime_tests",

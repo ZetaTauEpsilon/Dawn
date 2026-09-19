@@ -263,7 +263,7 @@ void draw() noexcept {
     ImGui::PopFont();
     ImGui::EndGroup();
     ImGui::Spacing();
-    ImGui::TextWrapped("%s", g_campaign == 0 ? "Board the Almighty. Stop the Red Legion's assault on the Sun."
+    ImGui::TextWrapped("%s", g_campaign == 0 ? "Defend the Last City from the Red Legion, then board the Almighty and stop its assault on the Sun."
                                             : g_campaign == 1 ? "Find Osiris. Step into the Infinite Forest."
                                             : selected_difficulty() == strikes::Difficulty::standard
                                                 ? "Take on the threats within the Infinite Forest."

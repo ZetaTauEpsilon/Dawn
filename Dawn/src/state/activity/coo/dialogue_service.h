@@ -22,7 +22,7 @@ struct DialogueDefinition final {
 // The schema-specific publisher retains ownership of the authority encoding.
 template<std::size_t Rows>
 class DialogueService final {
-    static_assert(Rows > 0 && Rows <= 64);
+    static_assert(Rows > 0 && Rows <= 128);
 public:
     [[nodiscard]] bool due(std::uint64_t now) const noexcept {
         for (const auto& cue : queue_) { if (cue.used && now >= cue.due) { return true; } }
@@ -40,11 +40,11 @@ public:
     void enqueue(const DialogueDefinition& policy, std::uint8_t row, std::uint64_t now,
                  std::uint64_t delay, std::uint8_t stage, std::uint32_t& revision) noexcept {
         if (row >= Rows || row >= policy.rows.size() || policy.rows[row].durationMs == 0
-            || policy.rows[row].sceneOwned || (requested_ & (1ULL << row)) != 0) { return; }
+            || policy.rows[row].sceneOwned || requested(row)) { return; }
         for (auto& cue : queue_) {
             if (!cue.used) {
                 cue = {now + delay, ++order_, row, stage, true};
-                requested_ |= 1ULL << row; ++revision; return;
+                requested_[row / 64] |= 1ULL << (row % 64); ++revision; return;
             }
         }
     }
@@ -98,8 +98,13 @@ private:
         std::uint8_t row{}, stage{};
         bool used{};
     };
+    [[nodiscard]] bool requested(std::uint8_t row) const noexcept {
+        return (requested_[row / 64] & (1ULL << (row % 64))) != 0;
+    }
     std::array<Cue, Rows> queue_{};
-    std::uint64_t requested_{}, offeredAt_{}, voiceUntil_{};
+    // One request bit per row; missions with more than 64 rows use the second word.
+    std::array<std::uint64_t, (Rows + 63) / 64> requested_{};
+    std::uint64_t offeredAt_{}, voiceUntil_{};
     std::uint32_t order_{}, timedOut_{};
 };
 } // namespace dawn::state::activity::coo

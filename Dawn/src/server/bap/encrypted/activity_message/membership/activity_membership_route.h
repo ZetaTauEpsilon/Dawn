@@ -44,7 +44,7 @@ namespace dawn::server::bap::encrypted::activity_message::membership {
         update.currentRegion={parsed.currentRegion.index,parsed.currentRegion.hash};
         update.hasCurrentRegion=parsed.hasCurrentRegion;
     }
-    if(destination=="mission_launchpad" || destination=="mission_ember") {
+    if(destination=="mission_launchpad" || destination=="mission_ember" || destination=="mission_towerfall") {
         const auto leg=[](const auto& v) -> state::activity::membership::RegionLeg {
             return {v.sliceSetIndex,v.sliceSetHash,v.regionIndex,v.publicState,v.auxState,v.present};
         };

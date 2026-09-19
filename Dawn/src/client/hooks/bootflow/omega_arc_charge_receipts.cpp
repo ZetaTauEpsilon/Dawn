@@ -1,4 +1,5 @@
 #include "../../../state/activity/vanilla/one_au/runtime.h"
+#include "../../../state/activity/vanilla/homecoming/runtime.h"
 #include "coo_native_components.h"
 #include "internal.h"
 #include "beyond_infinity_plate_timer.h"

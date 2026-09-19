@@ -14,6 +14,7 @@
 #include "../../hooking/call_gate.h"
 #include "../../hooking/detour.h"
 #include "one_au_entrance.h"
+#include "homecoming_entrance.h"
 
 namespace dawn::client::hooks::bootflow::omega_vex_lattice_probe {
 namespace detail {
@@ -169,7 +170,8 @@ __declspec(noinline) inline std::uint8_t __fastcall tick(std::byte* device,const
     // 1AU-fix patches the first snapshot call in this DF7FF0 callback. Run the
     // repair before the native device tick, regardless of the lattice identity.
     // The Ghost sensor's E4A590 callback is only for console ownership.
-    if(call.accepts_side_effects()) { one_au_entrance::update(image,device); }
+    // Homecoming runs first so the 1AU diagnostic line stays the last report of this tick.
+    if(call.accepts_side_effects()) { homecoming_entrance::update(image,device);one_au_entrance::update(image,device); }
     const bool matched=call.accepts_side_effects() && snapshot(device,before);
     if(matched && !before.initialized) {
         receipt("first_tick_before",device,before,nullptr,caller,0,0,true);
@@ -214,9 +216,10 @@ inline bool uninstall() noexcept {
     using namespace detail;
     quiesce();
     if(!handles[0].attached && !handles[1].attached) { return true; }
-    const std::array<hooking::detour::ProtectedCodeEntry,5> entries{{
+    const std::array<hooking::detour::ProtectedCodeEntry,6> entries{{
         {reinterpret_cast<void*>(&position)},{reinterpret_cast<void*>(&tick)},
         {reinterpret_cast<void*>(&one_au_entrance::update)},
+        {reinterpret_cast<void*>(&homecoming_entrance::update)},
         {reinterpret_cast<void*>(&hooking::call_gate_detail::enter)},
         {reinterpret_cast<void*>(&hooking::call_gate_detail::leave)}}};
     if(hooking::detour::uninstall(handles,entries,&idle)!=hooking::detour::UninstallResult::removed) {

@@ -5,6 +5,7 @@
 #include "../../../state/activity/hijacked/runtime.h"
 #include "../../../state/activity/hijacked/scan_playback.h"
 #include "../../../state/activity/vanilla/one_au/bridge_native.h"
+#include "../../../state/activity/vanilla/homecoming/console_native.h"
 #include "../../../state/activity/deep_storage/scan_playback.h"
 #include "../../hooking/call_gate.h"
 #include "../../hooking/detour.h"
@@ -144,6 +145,7 @@ void update(std::uintptr_t component) noexcept {
 #include "hijacked_scan_receipts.inl"
 #include "campaign_scan_receipts.inl"
 #include "one_au_bridge_scan.inl"
+#include "homecoming_console_scan.inl"
 __declspec(noinline) std::uintptr_t __fastcall tick(void* component,void* output) noexcept {
     hooking::CallGate::Scope scope(gate);
     const auto fn=hooking::await_original(original);
@@ -151,7 +153,7 @@ __declspec(noinline) std::uintptr_t __fastcall tick(void* component,void* output
     if(scope.accepts_side_effects()) {
         const auto sensor=reinterpret_cast<std::uintptr_t>(component);
         update(sensor);deep_scan::update(sensor);hijacked_scan::update(sensor);
-        campaign_scan::update(sensor);one_au_scan::update(sensor);
+        campaign_scan::update(sensor);one_au_scan::update(sensor);homecoming_scan::update(sensor);
     }
     return result;
 }
@@ -187,6 +189,7 @@ bool uninstall() noexcept {
         hooking::detour::ProtectedCodeEntry{reinterpret_cast<void*>(&hijacked_scan::update)},
         hooking::detour::ProtectedCodeEntry{reinterpret_cast<void*>(&campaign_scan::update)},
         hooking::detour::ProtectedCodeEntry{reinterpret_cast<void*>(&one_au_scan::update)},
+        hooking::detour::ProtectedCodeEntry{reinterpret_cast<void*>(&homecoming_scan::update)},
         hooking::detour::ProtectedCodeEntry{reinterpret_cast<void*>(&hooking::call_gate_detail::enter)},
         hooking::detour::ProtectedCodeEntry{reinterpret_cast<void*>(&hooking::call_gate_detail::leave)}};
     if(hooking::detour::uninstall(hook,protectedEntries,&idle)!=hooking::detour::UninstallResult::removed) { return false; }

@@ -164,13 +164,14 @@ static void ghost_packets() {
 }
 int main() {
     namespace openings=dawn::client::activity::mission_launch::openings;
-    unsigned redWar{};
+    unsigned redWar{},oneAu{};
     for(const auto& mission:openings::kMissions) if(mission.campaign==0 && openings::listed(mission)) {
-        ++redWar;check(mission.activity==281 && mission.investmentHash==0x38F926B2U
+        ++redWar;if(mission.activity!=281) continue;
+        ++oneAu;check(mission.investmentHash==0x38F926B2U
             && mission.destination.bubble==8 && mission.destination.sliceSet==64
             && mission.destination.spawnSetHash==0x2EA8FB98U,"1AU launch is pinned to its installed identity and opening");
     }
-    check(redWar==1,"Red War exposes only 1AU");
+    check(redWar==2 && oneAu==1,"Red War exposes Homecoming and 1AU");
     check(m::mission().valid(),"all mission graphs and checkpoint graphs are valid");
     std::string error;
     auto document=coo::script::MissionDocument::read(std::filesystem::path(__FILE__).parent_path().parent_path()/"scripts/one_au.lua",m::kEntryProfile,error);

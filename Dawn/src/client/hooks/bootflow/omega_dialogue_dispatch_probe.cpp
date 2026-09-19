@@ -1,5 +1,6 @@
 #include "garden_ending_native.h"
 #include "../../../state/activity/vanilla/one_au/runtime.h"
+#include "../../../state/activity/vanilla/homecoming/runtime.h"
 #include "../../../state/activity/gateway/runtime.h"
 #include "../../../state/activity/beyond_infinity/runtime.h"
 #include "../../../state/activity/deep_storage/runtime.h"
@@ -1190,6 +1191,14 @@ __declspec(noinline) void __fastcall dialogue_dispatch(std::byte* component,
                 beyondDispatch=true;
                 const auto generation=read_value<std::uint32_t>(component+kRecordGenerationOffset+static_cast<std::size_t>(index)*0x20U);
                 state::activity::vanilla::one_au::observe_submission(gatewayDispatchRun,self,offset,bank,static_cast<std::uint8_t>(index),generation);
+            }
+        }
+        if(component!=nullptr && index>=0 && index<static_cast<std::int32_t>(std::size(state::activity::vanilla::homecoming::kDialogue))) {
+            std::uint32_t self{};std::int64_t offset{};const auto bank=resolve_bank_handle(component,self,offset);
+            if(bank==state::activity::vanilla::homecoming::kBank) {
+                beyondDispatch=true;
+                const auto generation=read_value<std::uint32_t>(component+kRecordGenerationOffset+static_cast<std::size_t>(index)*0x20U);
+                state::activity::vanilla::homecoming::observe_submission(gatewayDispatchRun,self,offset,bank,static_cast<std::uint8_t>(index),generation);
             }
         }
         if(component!=nullptr && index>=0 && index<49) {

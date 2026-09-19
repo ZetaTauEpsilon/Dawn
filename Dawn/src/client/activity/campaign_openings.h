@@ -48,9 +48,10 @@ inline constexpr std::array<Mission, 12> kMissions{{
     {"1AU", "THE ALMIGHTY", "Board the Almighty and disable its weapon before it destroys the Sun.", 0, 281, 0x38F926B2U, forced::profiles::kOneAuOpening},
 }};
 
-// Keep existing route indices stable; only the implemented Red War mission is listed.
+// Keep existing route indices stable; only the implemented Red War missions are listed.
 [[nodiscard]] constexpr bool listed(const Mission& mission) noexcept {
-    return mission.campaign != 0 || mission.activity == forced::prelaunch::kOneAu.activity;
+    return mission.campaign != 0 || mission.activity == forced::prelaunch::kOneAu.activity
+        || mission.activity == forced::prelaunch::kTowerfall.activity;
 }
 
 struct Route {

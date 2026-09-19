@@ -11,7 +11,7 @@ import verify_lua
 import native_test_inputs
 
 ROOT = verify.ROOT
-SCRIPTS = ('one_au.lua', 'launchpad.lua', 'omega.lua', 'deadly_trial.lua', 'gateway.lua', 'beyond_infinity.lua', 'deep_storage.lua', 'hijacked.lua', 'strike_pact.lua', 'strike_bond.lua', 'mission_pact.lua', 'mission_bond.lua', 'eater_of_worlds.lua', 'mercury_freeroam.json',
+SCRIPTS = ('one_au.lua', 'homecoming.lua', 'launchpad.lua', 'omega.lua', 'deadly_trial.lua', 'gateway.lua', 'beyond_infinity.lua', 'deep_storage.lua', 'hijacked.lua', 'strike_pact.lua', 'strike_bond.lua', 'mission_pact.lua', 'mission_bond.lua', 'eater_of_worlds.lua', 'mercury_freeroam.json',
            'eden_freeroam.json', 'fleet_freeroam.json', 'polaris_freeroam.json', 'planet_x_freeroam.json',
            'tangled_shore_freeroam.json', 'dreaming_city_freeroam.json', 'infinite_abyss.json')
 

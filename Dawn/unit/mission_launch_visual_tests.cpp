@@ -252,9 +252,10 @@ int main(int argc, char** argv) {
     g_launchState = {}; panel::g_campaign = 0; panel::g_resetScroll = true;
     frame(); frame();
     screenshot(screens / "dawn-red-war-1au.ppm");
-    const auto hiddenHomecomingRequests = g_requests;
+    const auto homecomingRequests = g_requests;
     frame(1500, 1000, row_id(0)); frame();
-    check(g_requests == hiddenHomecomingRequests, "Homecoming has no launch button");
+    check(g_requests == homecomingRequests + 1, "Homecoming launch button requests its opening");
+    g_launchState = {}; frame(); frame();
     // Exercise the actual campaign tab button with keyboard navigation activation.
     ImGuiWindow* content{};
     for (auto* window : ImGui::GetCurrentContext()->Windows) {
@@ -263,10 +264,10 @@ int main(int argc, char** argv) {
     check(content != nullptr, "content surface found");
     panel::g_campaign=1;
     frame(1500, 1000, content->GetID("Red War")); frame(); frame();
-    check(panel::g_campaign==0, "Red War tab exposes 1AU");
+    check(panel::g_campaign==0, "Red War tab exposes Homecoming and 1AU");
     check(std::count_if(openings::kMissions.begin(),openings::kMissions.end(),
-        [](const auto& m) {return m.campaign==0 && openings::listed(m);})==1,
-        "1AU is the only listed Red War mission");
+        [](const auto& m) {return m.campaign==0 && openings::listed(m);})==2,
+        "Homecoming and 1AU are the listed Red War missions");
     frame(1500, 1000, content->GetID("Curse of Osiris")); frame(); frame();
     check(panel::g_campaign == 1, "Curse of Osiris tab switches campaigns");
     frame(1500, 1000, content->GetID("Strikes")); frame(); frame();
@@ -345,6 +346,6 @@ int main(int argc, char** argv) {
     check(g_gpu->Release() == 0, "GPU resources released");
     const auto stats = ui::memory::snapshot();
     check(stats.outstandingAllocations == 0 && ui::memory::shutdown(), "fixed arena released");
-    std::cout << "PASS: Dawn production layout, " << openings::kMissions.size() - 1 << " launch buttons, Homecoming hidden, preparing/in-mission/wrong-destination/busy/unavailable states, campaign/Strikes/Nightfalls tabs, DPI and close/reopen; zero ImGui errors; "
+    std::cout << "PASS: Dawn production layout, " << openings::kMissions.size() << " launch buttons, preparing/in-mission/wrong-destination/busy/unavailable states, campaign/Strikes/Nightfalls tabs, DPI and close/reopen; zero ImGui errors; "
         << stats.highWaterBytes << "/" << stats.capacityBytes << " arena high water\n";
 }

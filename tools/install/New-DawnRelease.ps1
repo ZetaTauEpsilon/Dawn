@@ -64,7 +64,7 @@ $files = @($inputs | ForEach-Object {
     if ((Get-FileHash -LiteralPath $destination).Hash -ne $_.Hash) { throw "Source changed while packaging: $($_.Source)" }
     [ordered]@{ path = $_.Path; size = (Get-Item -LiteralPath $destination).Length; sha256 = $_.Hash.ToLowerInvariant() }
 })
-foreach ($name in @('Install-Dawn.ps1', 'Install-Dawn.cmd', 'Update-Dawn.ps1', 'Update-Dawn.cmd', 'READ-ME.txt')) {
+foreach ($name in @('Install-Dawn.ps1', 'Install-Dawn.cmd', 'Update-Dawn.ps1', 'Update-Dawn.cmd', 'Uninstall-Dawn.ps1', 'Uninstall-Dawn.cmd', 'READ-ME.txt')) {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot "release/$name") -Destination (Join-Path $output $name)
 }
 if ($ReleaseNotesPath) {

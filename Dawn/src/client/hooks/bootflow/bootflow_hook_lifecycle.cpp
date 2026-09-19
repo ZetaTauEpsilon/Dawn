@@ -26,6 +26,7 @@
 #include "deadly_trial_revival.h"
 #include "deadly_trial_lifetime.h"
 #include "gateway_patrol.h"
+#include "gateway_cannon.h"
 
 namespace dawn::client::hooks::bootflow {
 namespace {
@@ -272,6 +273,7 @@ bool install() noexcept {
     const bool trialRevival = deadly_trial_revival::install();
     const bool trialLifetime = deadly_trial_lifetime::install();
     const bool gatewayPatrol = gateway_patrol::install();
+    const bool gatewayCannon = gateway_cannon::install();
     const bool hijackedPlacements = hijacked_placements::install();
     const bool forestCandyInstalled = omega.forestCandyDrops && forest_candy_drops::install();
     const bool forestCandy = !omega.forestCandyDrops || forestCandyInstalled;
@@ -290,7 +292,7 @@ bool install() noexcept {
                         || omegaSceneRetirementInstalled
                         || type31CaptureInstalled || dialogueDispatchProbe || omegaNavigation || omegaLairCinematic
                         || omegaLairReceipts || vanceContactInstalled || ambientNamedPoints || nativeCapture || replicationObserver || omegaCannonReceipt || omegaArcCharge || publicEventParticipant || omegaRescueScenes || trialRevival || trialLifetime || hijackedPlacements
-                        || forestCandyInstalled || omegaLatticeProbe || gatewayPatrol
+                        || forestCandyInstalled || omegaLatticeProbe || gatewayPatrol || gatewayCannon
                         || featureFlagInstalled
                         || prologueFiller || regionPrivate || cleanupOwnerGuard || propertyListGuard || localReconnect
                         || worldStep || spawn || towerfallExecutor || fade;
@@ -306,7 +308,7 @@ bool install() noexcept {
                               && omegaNavigation && omegaLairCinematic
                               && omegaLairReceipts && vanceContact && ambientNamedPoints && nativeCapture && omegaCannonReceipt && omegaArcCharge && publicEventParticipant && omegaRescueScenes && trialRevival && trialLifetime && hijackedPlacements
                               && forestCandy && featureFlag && prologueFiller && regionPrivate
-                              && worldStep && spawn && towerfallExecutor && fade && gatewayPatrol;
+                              && worldStep && spawn && towerfallExecutor && fade && gatewayPatrol && gatewayCannon;
     // Admission opens only for this fresh lifecycle and before its installed publication. The
     // exclusive lock keeps retail callbacks from observing either half of that publication.
     g_acceptLateInstalls.store(anyFix, std::memory_order_release);
@@ -346,6 +348,7 @@ void quiesce() noexcept {
     deadly_trial_revival::quiesce();
     deadly_trial_lifetime::quiesce();
     gateway_patrol::quiesce();
+    gateway_cannon::quiesce();
     omega_vex_lattice_probe::quiesce();
 
     quiesce_type31_objective_capture();
@@ -424,6 +427,7 @@ bool uninstall() noexcept {
     if (!deadly_trial_revival::uninstall()) { return false; }
     if (!deadly_trial_lifetime::uninstall()) { return false; }
     if (!gateway_patrol::uninstall()) { return false; }
+    if (!gateway_cannon::uninstall()) { return false; }
     if (!omega_vex_lattice_probe::uninstall()) { return false; }
     uninstall_omega_dialogue_dispatch_probe();
     uninstall_activity_spawner_chain_probe();

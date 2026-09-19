@@ -7,6 +7,7 @@
 #include "client/hooks/bootflow/gateway_vance_native_path.h"
 #include "client/hooks/bootflow/gateway_module_damage.h"
 #include "client/hooks/bootflow/gateway_patrol_native.h"
+#include "client/hooks/bootflow/gateway_cannon_native.h"
 #include "state/activity/omega_rescue_scene_authority.h"
 #include "fixtures/gateway_traversal_wire.h"
 #include "fixtures/gateway_mainland_wire.h"
@@ -176,7 +177,14 @@ void traversal_tests(const c::script::Views& views,bool retainShelfActor,bool sk
     }
     CHECK(!frame.pendingServices);
     std::uint32_t nextActor=0x12340000U;
-    g::EnemyReceipt shelfStraggler{};
+    g::EnemyReceipt shelfStraggler{},finalStraggler{};
+    const auto checkFinalCannon=[&](bool released) {
+        CHECK(g::cannon::blocked(g::cannon::request(run,run,frame.finalCannon))==!released);
+        std::array<std::byte,32> bytes{};bits::Writer writer(bytes);
+        CHECK(g::write_body(writer,frame,g::kTraversalRegistry,23,2));CHECK(writer.bit_count()==147);
+        bits::Reader reader(bytes);std::uint64_t position{};CHECK(reader.read(32,position));
+        CHECK(position==(released?0x3F800000U:0U));
+    };
     const auto clear=[&](std::uint8_t cohort) {
         for(const auto& source:g::kSpawns) { if(source.cohort!=cohort) { continue; }
             for(unsigned n=0;n<source.count;++n) {
@@ -187,6 +195,7 @@ void traversal_tests(const c::script::Views& views,bool retainShelfActor,bool sk
                 CHECK(controller.admitted(receipt));CHECK(!controller.admitted(receipt));
                 wrong=receipt;wrong.owner++;CHECK(!controller.died(wrong));
                 if(retainShelfActor && source.registry==g::kTraversalRegistry && source.source==231) { shelfStraggler=receipt;continue; }
+                if(source.registry==g::kTraversalRegistry && source.source==209 && n==0) { finalStraggler=receipt;continue; }
                 CHECK(controller.died(receipt));CHECK(!controller.died(receipt));
             }
         }
@@ -211,7 +220,14 @@ void traversal_tests(const c::script::Views& views,bool retainShelfActor,bool sk
     if(skipShelfReinforcement) { clear(4); }
     // Reaching the final ledge starts its real encounter despite the surviving shelf actor.
     CHECK(!frame.finalCannon);clear(5);CHECK(frame.cohorts==127);CHECK(!frame.finalCannon);
-    clear(6);tick();CHECK(frame.finalCannon);
+    clear(6);tick();CHECK(finalStraggler.valid());CHECK(!frame.finalCannon);checkFinalCannon(false);
+    // Captured regression: one final-wave enemy remains. Proximity, earlier
+    // cannons and elapsed time cannot enable either the launch force or its VFX.
+    CHECK(frame.cannons);controller.position(run,interior(376));now+=60000;tick();checkFinalCannon(false);
+    auto staleFinal=finalStraggler;staleFinal.generation++;CHECK(!controller.died(staleFinal));
+    tick();checkFinalCannon(false);
+    CHECK(controller.died(finalStraggler));CHECK(!controller.died(finalStraggler));
+    tick();CHECK(frame.finalCannon);checkFinalCannon(true);
     CHECK(frame.cohorts==511); // Mainland placed before the final cannon is taken.
     // Shelf passage did not fabricate that actor's death or discard its native identity.
     if(retainShelfActor) { CHECK(controller.died(shelfStraggler));CHECK(!controller.died(shelfStraggler)); }
@@ -519,6 +535,29 @@ struct ModuleMemory {
         if(handle==0x12340123) { base=healthAddress;return true; }return false;
     }
 };
+void cannon_gate_tests() {
+    namespace native=dawn::client::hooks::bootflow::gateway_cannon;
+    namespace cannon=g::cannon;
+    CHECK(!cannon::blocked(cannon::request(0,0,false)));
+    CHECK(!cannon::blocked(cannon::request(10,11,false)));
+    CHECK(cannon::blocked(cannon::request(11,11,false)));
+    CHECK(!cannon::blocked(cannon::request(11,11,true)));
+    CHECK(cannon::blocked(cannon::request(12,12,false))); // New run relocks.
+    auto memory=std::make_unique<ModuleMemory>();auto& m=*memory;
+    constexpr std::uintptr_t component=0x11000;
+    m.put(component,cannon::kDefinition);m.put(component+4,cannon::kKind);m.put(component+8,cannon::kOffset);
+    m.put(component+0x24,std::uint32_t{11});m.put(component+0x2C,std::uint32_t{0x70FAA3EE});
+    CHECK(native::owns(m,component));
+    for(const auto definition:{0x80F46DB5U,0x80B4C1DCU,0x80F470EEU}) {
+        m.put(component,definition);CHECK(!native::owns(m,component)); // Earlier cores and the VFX device.
+    }
+    m.put(component,cannon::kDefinition);m.put(component+4,cannon::kKind+1);CHECK(!native::owns(m,component));
+    m.put(component+4,cannon::kKind);m.put(component+8,cannon::kOffset+8);CHECK(!native::owns(m,component));
+    m.put(component+8,cannon::kOffset);m.put(component+0x24,std::uint32_t{12});CHECK(!native::owns(m,component));
+    m.put(component+0x24,UINT32_MAX);CHECK(!native::owns(m,component));
+    m.put(component+0x24,std::uint32_t{11});m.put(component+0x2C,UINT32_MAX);CHECK(!native::owns(m,component));
+    CHECK(!native::owns(m,0));
+}
 void vance_native_path_tests() {
     namespace path=dawn::client::hooks::bootflow::gateway_vance_native_path;
     auto memory=std::make_unique<ModuleMemory>();auto& m=*memory;
@@ -908,7 +947,7 @@ void forest_threshold_tests(const c::script::Views& views) {
     }
 }
 int main() {
-    patrol_loop_tests();patrol_command_tests();
+    patrol_loop_tests();patrol_command_tests();cannon_gate_tests();
     changed_lua_flow_tests();
     std::string error;auto document=c::script::MissionDocument::read("Dawn/scripts/gateway.lua",g::kProfile,error);
     if(!document) { std::fprintf(stderr,"%s\n",error.c_str()); }CHECK(document);CHECK(g::valid_document(document->views()));

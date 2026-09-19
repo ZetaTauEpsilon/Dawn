@@ -366,6 +366,7 @@
     <ClCompile Include="src\client\hooks\bootflow\deadly_trial_revival.cpp" />
     <ClCompile Include="src\client\hooks\bootflow\deadly_trial_lifetime.cpp" />
     <ClCompile Include="src\client\hooks\bootflow\gateway_patrol.cpp" />
+    <ClCompile Include="src\client\hooks\bootflow\gateway_cannon.cpp" />
     <ClCompile Include="src\client\hooks\bootflow\omega_rescue_scene_receipts.cpp" />
     <ClCompile Include="src\middleware\bap\activity_message\activity_sensor_auth_bodies_other_missions.cpp" />
     <ClCompile Include="src\middleware\bap\activity_message\activity_sensor_auth_blocks_other_missions.cpp" />

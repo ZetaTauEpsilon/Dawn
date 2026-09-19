@@ -8,9 +8,9 @@
 
 Install a packaged release over an existing game installation using the bundled Dawn installer.
 
-**[Download the installer ZIP — 0.1.3](https://github.com/isinternets/Dawn/releases/download/v0.1.3/Dawn-0.1.3.zip)**
+**[Download the installer ZIP — 0.1.5.1](https://github.com/isinternets/Dawn/releases/download/v0.1.5.1/Dawn-0.1.5.1.zip)**
 
-[Release notes and checksum](https://github.com/isinternets/Dawn/releases/tag/v0.1.3)
+[Release notes and checksum](https://github.com/isinternets/Dawn/releases/tag/v0.1.5.1)
 
 </div>
 
@@ -34,12 +34,12 @@ Players do not need Visual Studio, Python, Lua, or a source checkout.
 
 ### If you want to play
 
-Download **[Dawn-0.1.3.zip](https://github.com/isinternets/Dawn/releases/download/v0.1.3/Dawn-0.1.3.zip)**
-from the [GitHub release](https://github.com/isinternets/Dawn/releases/tag/v0.1.3). Under
+Download **[Dawn-0.1.5.1.zip](https://github.com/isinternets/Dawn/releases/download/v0.1.5.1/Dawn-0.1.5.1.zip)**
+from the [GitHub release](https://github.com/isinternets/Dawn/releases/tag/v0.1.5.1). Under
 **Assets**, choose that named installer ZIP. GitHub's automatically generated **Source code**
 archives contain the source checkout and do not include the installable payload.
 
-Version 0.1.3 includes performance and mission fixes, persistent game settings, and an updater that keeps existing saves. Read the release notes before installing. Extract the entire installer
+Version 0.1.5.1 fixes Gateway's final cannon activation and includes rebindable camera controls, file logging by default, and a standalone uninstaller. The updater keeps existing saves and settings. Read the release notes before installing. Extract the entire installer
 ZIP into its own folder. Before running anything, check that the extracted folder contains:
 
 ```text
@@ -48,6 +48,8 @@ Dawn-<release>/
   Install-Dawn.ps1
   Update-Dawn.cmd
   Update-Dawn.ps1
+  Uninstall-Dawn.cmd
+  Uninstall-Dawn.ps1
   READ-ME.txt
   release.json
   payload/
@@ -87,6 +89,8 @@ tools/install/
     Install-Dawn.ps1
     Update-Dawn.cmd
     Update-Dawn.ps1
+    Uninstall-Dawn.cmd
+    Uninstall-Dawn.ps1
     READ-ME.txt
     README.md
 ```
@@ -177,6 +181,26 @@ From PowerShell in the extracted release folder, replace `D:\Dawn` with your gam
 
 This validates the package and installation and shows the intended changes without changing your
 game files or display preferences. Omit `-WhatIf` to install.
+
+## Uninstall Dawn
+
+Close Destiny 2, then double-click
+[`Uninstall-Dawn.cmd`](tools/install/release/Uninstall-Dawn.cmd) and enter the game
+folder. Keep `Uninstall-Dawn.ps1` beside the launcher; no release payload is needed.
+Newly packaged releases include both files.
+
+The uninstaller **permanently deletes all Dawn saves, settings, caches, and
+backups**, including both Dawn runtime folders and the entire `.dawn` directory.
+It restores original Steam DLLs when found in your backups before deleting those
+backups. If none are available, it reports the missing DLLs to recover from your
+original game backup before launching. Original game files and native
+graphics/key-binding preferences remain intact. No uninstall backup is kept.
+
+Preview from PowerShell with:
+
+```powershell
+.\tools\install\release\Uninstall-Dawn.ps1 -GameRoot "D:\Games\Destiny 2" -WhatIf
+```
 
 ## Backups and rollback
 
@@ -279,7 +303,7 @@ tools. These requirements do not apply to players installing a release ZIP.
 From PowerShell:
 
 ```powershell
-git clone --branch codex/production https://github.com/isinternets/Dawn.git dawn
+git clone --branch production https://github.com/isinternets/Dawn.git dawn
 cd dawn
 & "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\MSBuild\Current\Bin\amd64\MSBuild.exe" `
   Dawn/Dawn.vcxproj /p:Configuration=Release /p:Platform=x64 `

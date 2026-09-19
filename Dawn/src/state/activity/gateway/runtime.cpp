@@ -146,6 +146,12 @@ std::uint64_t native_run() noexcept {
     if(!mission_seed_armed() || world_phase()!=WorldPhase::arrived) { return 0; }
     const std::lock_guard lock(mutex);return selectedRun==mission_run_generation()?selectedRun:0;
 }
+cannon::Request cannon_request() noexcept {
+    const std::lock_guard lock(mutex);
+    // Use the same completed end-clear join as type23/2's visual effect. Remain
+    // blocked while this selected run is still preparing or awaiting enemies.
+    return cannon::request(selectedRun,mission_run_generation(),controller.frame().finalCannon);
+}
 EnemyReceipt marcher(std::uint32_t actor) noexcept {
     if(!mission_seed_armed() || world_phase()!=WorldPhase::arrived) return {};
     const std::lock_guard lock(mutex);

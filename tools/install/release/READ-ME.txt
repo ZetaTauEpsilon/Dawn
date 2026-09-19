@@ -40,6 +40,23 @@ The fresh installer sets Windowed Fullscreen and preserves resolution, render
 scale, graphics quality, and native key bindings. This display mode is shared
 by Destiny installations under the same Windows user. You can change it later.
 
+UNINSTALLING
+
+Close Destiny 2, double-click Uninstall-Dawn.cmd, and enter the game folder.
+Only Uninstall-Dawn.cmd and Uninstall-Dawn.ps1 are needed for this operation.
+ALL Dawn saves, settings, caches, DLLs/debug symbols, runtime folders, and the
+entire .dawn directory (including every installer backup) are permanently deleted.
+No uninstall backup is kept. Original game files and native display preferences
+are left in place.
+
+Preview without changing files:
+  .\Uninstall-Dawn.ps1 -GameRoot 'D:\Games\Destiny 2' -WhatIf
+
+An original Steam DLL is restored when found in existing backups. If none is
+available, the script removes Dawn and tells you which DLLs to recover from
+your original game backup before launching. To supply your own original:
+  .\Uninstall-Dawn.ps1 -GameRoot 'D:\Games\Destiny 2' -OriginalDll 'D:\Backup\steam_api64.dll'
+
 BACKUP AND ROLLBACK
 
 Both workflows keep complete backups under <game>\.dawn\release-backups.

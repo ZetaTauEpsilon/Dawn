@@ -5,7 +5,9 @@
 #include "traversal_catalog.h"
 #include "../coo/population_service.h"
 #include "../coo/object_service.h"
+#include "cannon_gate.h"
 namespace dawn::state::activity::gateway {
+[[nodiscard]] cannon::Request cannon_request() noexcept;
 [[nodiscard]] coo::ReadinessRequest<EnemyReceipt> readiness_request(std::uint64_t now) noexcept;
 void observe_capacity(std::uint64_t,coo::PopulationCapacity) noexcept;
 struct ObjectRequest { coo::Generation owner{};std::array<coo::ObjectState,3> states{};bool enabled{}; };

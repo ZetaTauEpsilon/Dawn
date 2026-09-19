@@ -3,7 +3,7 @@
   "core": {
     "logging": {
       "debugger_sink": true,
-      "file_sink": false,
+      "file_sink": true,
       "levels": {
         "core": "warn",
         "client": "warn",

@@ -367,6 +367,9 @@ Pass 'Updater rejects a known newer installed release'
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $zip = [IO.Compression.ZipFile]::OpenRead($package + '.zip')
 try {
+    foreach ($name in @('Uninstall-Dawn.cmd', 'Uninstall-Dawn.ps1')) {
+        Assert-True ($null -ne $zip.GetEntry($name)) "Player ZIP is missing $name"
+    }
     $extra = @($zip.Entries | Where-Object { $_.FullName -match '(^|/)(src|tools|tests|cache|logs)/|\.pdb$|player-state\.db' })
     Assert-True ($extra.Count -eq 0) 'Player ZIP contains development/private files'
 } finally { $zip.Dispose() }

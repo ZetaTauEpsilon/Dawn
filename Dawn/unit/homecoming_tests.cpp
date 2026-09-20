@@ -12,6 +12,8 @@
 #include "client/activity/campaign_openings.h"
 #include "middleware/encoding/bit_writer.h"
 #include "middleware/encoding/bit_reader.h"
+#include <algorithm>
+#include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -144,29 +146,47 @@ static void cinematics() {
 }
 static void prologue_chain() {
     namespace pro=m::prologue;
+    std::array<dawn::state::build_data::activities::Definition,268> rows{};
+    rows[pro::kVideo].hash=pro::kVideoHash;rows[pro::kMission].hash=pro::kMissionHash;
+    std::copy(m::kPackage.begin(),m::kPackage.end(),rows[pro::kMission].package.begin());
+    check(pro::catalog_valid(rows),"the opening video precedes Homecoming in the installed catalog");
+    rows[pro::kVideo].package[0]='x';check(!pro::catalog_valid(rows),"a named entry is not the opening video");
     pro::Sequence chain;chain.begin(100);
-    check(chain.wanted()==pro::kTowerCinematic,"the Red War opening starts with the Tower cinematic activity");
-    check(!chain.queued(pro::kMission,100) && chain.queued(pro::kTowerCinematic,100),"only the wanted activity can be queued");
-    chain.selected(7,266,m::kScenario,110);
-    check(!chain.frame(7).enabled,"the mission scenario cannot bind the cinematic");
-    chain.selected(7,pro::kTowerCinematic,pro::kScenario,110);
-    check(chain.frame(7).enabled && !chain.frame(8).enabled && chain.frame(7).revision==1,"the loaded Tower cinematic scenario binds the run");
-    check(pro::matches(chain.frame(7),0x32DDAD77U,6,0) && !pro::matches(chain.frame(7),0x32DDAD77U,6,1),"the cinematic owner body matches the approach movie");
-    const dawn::state::activity::ActivityInstanceKey instance{0x9EAA300100200001ULL,{7}};
-    auto authority=chain.project(instance,7,42,{},120);
-    check(authority.publish && authority.host.state==1 && authority.host.sliceSetIndex==pro::kSliceSet,"arrival requests the authored cinematic slice");
-    pro::native::Observation arrived{};arrived.hasTeleport=true;arrived.local={3,authority.host.token,pro::kSliceSet,pro::kSliceHash};arrived.hasRegion=true;arrived.currentRegion=pro::kSliceSet;
-    authority=chain.project(instance,7,42,arrived,130);
-    check(chain.state().phase==pro::Phase::offered && chain.frame(7).play,"reaching the cinematic slice offers playback");
-    check(!chain.incident(7,{5239,0x964D8F24U,1,6,0},140),"the mission intro cannot answer the Tower cinematic");
-    check(chain.incident(7,{5239,0x32DDAD77U,1,6,0},140) && chain.state().phase==pro::Phase::playing,"native playback start is accepted");
-    check(chain.incident(7,{1685,0x32DDAD77U,1,6,0},150) && chain.state().phase==pro::Phase::missionRequested,"native completion requests the mission");
-    check(chain.wanted()<0,"the mission waits for the teleport release");
-    pro::native::Observation released{};released.hasTeleport=true;released.local={0,authority.host.token,pro::kSliceSet,pro::kSliceHash};
-    chain.project(instance,7,42,released,160);
-    check(chain.wanted()==pro::kMission && chain.queued(pro::kMission,160) && chain.frame(7).enabled,"the released teleport queues Homecoming while the owner stays published");
-    chain.complete();check(chain.state().phase==pro::Phase::complete && !chain.frame(7).enabled,"arrival in Homecoming completes the chain");
-    chain.begin(200);chain.tick(300000);check(chain.state().phase==pro::Phase::failed,"an unanswered cinematic launch fails closed");
+    check(chain.wanted()==pro::kVideo,"the Red War opening starts with the opening video activity");
+    check(!chain.queued(pro::kMission,100) && chain.queued(pro::kVideo,100),"only the wanted activity can be queued");
+    check(chain.wanted()<0 && chain.state().phase==pro::Phase::videoLoading,"the queued video waits for native playback");
+    chain.video(39,pro::kVideo,false,true,110);
+    check(chain.state().phase==pro::Phase::videoLoading,"a stale finished flag is not playback");
+    chain.video(39,pro::kMission,true,false,110);
+    check(chain.state().phase==pro::Phase::videoLoading,"another activity's playback is ignored");
+    chain.video(39,pro::kVideo,true,false,120);
+    check(chain.state().phase==pro::Phase::videoPlaying,"native playback is observed");
+    chain.tick(120+500000);
+    check(chain.state().phase==pro::Phase::videoPlaying,"the full-length opening does not time out");
+    chain.video(39,pro::kVideo,false,true,150000);
+    check(chain.state().phase==pro::Phase::videoReturning && chain.wanted()<0,"completion waits for the native chain");
+    chain.video(29,-1,false,false,151000);chain.video(29,-1,false,false,160000);
+    check(chain.wanted()<0,"a transient orbit step does not compete with the native chain");
+    chain.selected(7,pro::kMission,0x12345678U,161000);
+    check(chain.state().phase==pro::Phase::videoReturning,"a different scenario cannot bind the mission");
+    chain.selected(0,pro::kMission,m::kScenario,161000);
+    check(chain.state().phase==pro::Phase::videoReturning,"an absent run cannot bind the mission");
+    chain.selected(7,pro::kMission,m::kScenario,161000);
+    check(chain.state().phase==pro::Phase::missionLoading && chain.state().run==7 && chain.wanted()<0,"retail's mission selection is the arrival receipt");
+    chain.video(29,-1,false,false,161000+pro::kOrbitGraceMs);
+    check(chain.wanted()<0,"the loading mission is never relaunched");
+    chain.complete();check(chain.state().phase==pro::Phase::complete,"arrival in Homecoming completes the chain");
+    // Orbit after the video without the native chain: the adapter launches the mission.
+    chain.begin(200);check(chain.queued(pro::kVideo,200),"the chain restarts from the video");
+    chain.video(39,pro::kVideo,true,false,210);chain.video(39,pro::kVideo,false,true,220);
+    chain.video(29,-1,false,false,230);chain.video(33,-1,false,false,240);chain.video(29,-1,false,false,250);
+    chain.video(29,-1,false,false,250+pro::kOrbitGraceMs-1);
+    check(chain.wanted()<0,"the orbit grace restarts with every step away from orbit");
+    chain.video(29,-1,false,false,250+pro::kOrbitGraceMs);
+    check(chain.wanted()==pro::kMission && chain.queued(pro::kMission,300000),"a lasting orbit step hands the mission to the launch adapter");
+    chain.selected(9,pro::kMission,m::kScenario,300100);
+    check(chain.state().phase==pro::Phase::missionLoading && chain.state().run==9,"the adapter's launch binds the same receipt");
+    chain.begin(400);chain.tick(400+30000);check(chain.state().phase==pro::Phase::failed,"an unanswered video launch fails closed");
 }
 static void dialogue_rows() {
     coo::DialogueService<std::size(m::kDialogue)> service;

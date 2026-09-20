@@ -19,13 +19,19 @@ nine immutable section graphs.
 - Opening bubble 9 (Underwatch), slice set 72. The spawn set stays absent on
   purpose: the authored arrival owns the point inside the slice, exactly as the
   existing Towerfall prelaunch profile already declared.
-- Launch: the Red War opening is two activities. The campaign panel first
-  launches the Tower cinematic activity (public activity 2, `cine_110_twr`,
-  scenario `0x80B4A0EA`, movie owner `0x32DDAD77` in slice set 25), and when its
-  movie ends the launch adapter launches activity 266 from inside that world
-  through the same `publish_direct` opening path as 1AU (`prologue.h`, driven
-  exactly like Gateway's briefing chain). The Chosen (282) donor fallback that
-  the archived Towerfall experiment used is untouched.
+- Launch: the Red War opening is two activities. Public activity 265 (hash
+  `0xF07A75D3`) is the pre-rendered opening video: it has no scenario package,
+  carries the same video presentation block as Gateway's nameless entries 289
+  and 290, and its first chain link is the mission (266, link kind 2, the kind
+  the client advances by itself; Gateway's briefing-to-mission link is kind 1
+  and needs the adapter). The campaign panel publishes the 1AU-style opening
+  override for 266, scoped to the mission and its chain source, queues the
+  video, observes playback through the native video manager at step 39, and
+  takes the exact loaded Homecoming scenario as the arrival receipt
+  (`prologue.h`). If the client stays in orbit for fifteen seconds after the
+  video instead, the adapter launches 266 itself. Without the installed video
+  entry the mission launches directly. The Chosen (282) donor fallback that the
+  archived Towerfall experiment used is untouched.
 - Lua entry: `Dawn/scripts/homecoming.lua` (mission id `homecoming`, profile
   `homecoming.native.v1`); native controller: `src/state/activity/vanilla/homecoming`.
 - Mission cinematic owners: the ship approach `0x964D8F24` (bubble 2, region 17),
@@ -149,10 +155,10 @@ Every touchpoint mirrors 1AU: wire snapshot frame, authority body dispatch,
 roster admission (`homecoming_roster.h`, groups resolved by key), membership
 legs and transit, keepalive publication, sense/cinematic routing, opening fade
 mask, position sampling, object/enemy/dialogue receipts, membership commit
-guards, and the launch panel. The Tower cinematic chain reuses the launchpad
-Tower approach bookend (`launchpad_roster::approach`, `tower::write`) and the
-Gateway briefing departure. The compact Tower Watch cue manifest is skipped
-while the native module is prepared.
+guards, and the launch panel. The opening video chain reuses Gateway's native
+video poll and the direct-launch override and publishes no in-world owner of
+its own. The compact Tower Watch cue manifest is skipped while the native
+module is prepared.
 
 ## Verification
 
@@ -160,12 +166,15 @@ while the native module is prepared.
   (cache-record invariant, Scene casts, loose cohorts free of Scene-owned
   sources), the nine section graphs, the shipped Lua entry, every authority body
   width in three frame states, the approach/pickup/outro cinematic sequence, the
-  Tower cinematic prologue chain, the 94-row dialogue service, the music
+  opening video chain, the 94-row dialogue service, the music
   selection, the door authority grants and stale receipts.
 - Existing suites updated for the listed mission: `one_au_tests`,
   `mission_launch_visual_tests`, `player_position_tests`.
 - In-game: the first playtest confirmed the ship-approach movie, the Underwatch,
   the Cayde and Shaxx scenes, the armory and the military wing up to the plaza
   entry. The plaza public-bubble hang, the idle doorway civilians, the drop-in
-  spawns, the missing Tower prologue and the cue and music timing found in that
-  test are addressed above and need another pass.
+  spawns, the missing opening cinematic and the cue and music timing found in
+  that test are addressed above and need another pass. The second playtest
+  chained the Tower approach movie (`cine_110_twr`) as the prologue, which is
+  not the Red War opening; the video activity above replaces it and has not
+  been played yet.

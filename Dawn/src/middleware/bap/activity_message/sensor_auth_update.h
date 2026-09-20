@@ -197,8 +197,6 @@ struct Snapshot final {
     state::activity::newlight::launchpad::welcome::Frame newlightWelcome{};
     state::activity::vanilla::one_au::Frame one_au{};
     state::activity::vanilla::homecoming::Frame homecoming{};
-    /** The Red War opening's Tower cinematic owner, published while cine_110_twr precedes Homecoming. */
-    state::activity::newlight::launchpad::tower::Frame homecomingPrologue{};
     state::activity::deadly_trial::Frame deadly_trial{};
     state::activity::strike_pact::Frame strike_pact{};
     state::activity::strike_bond::Frame strike_bond{};

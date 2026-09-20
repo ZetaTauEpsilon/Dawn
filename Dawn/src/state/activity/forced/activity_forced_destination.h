@@ -14,8 +14,12 @@ namespace dawn::state::activity::forced {
  * @return True when every named field is inside its wire range and the value was stored.
  */
 [[nodiscard]] bool publish(const ForcedDestination& value) noexcept;
-/** Apply opening coordinates only to this activity's own native selection; preserve its descriptor. */
-[[nodiscard]] bool publish_direct(const ForcedDestination& value, std::int16_t activity) noexcept;
+/**
+ * Apply opening coordinates only to this activity's own native selection, or to the selection
+ * retail chains into it from `chainSource`; preserve its descriptor.
+ */
+[[nodiscard]] bool publish_direct(const ForcedDestination& value, std::int16_t activity,
+                                  std::int16_t chainSource = destination::kAbsentActivityIndex) noexcept;
 /** Atomically copies the direct destination and returns its exact native activity. */
 [[nodiscard]] std::int16_t direct_snapshot(ForcedDestination& value) noexcept;
 

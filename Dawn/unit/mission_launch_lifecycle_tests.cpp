@@ -6,6 +6,7 @@
 #include <vector>
 #include "client/activity/mission_launch.h"
 #include "state/activity/gateway_intro.h"
+#include "state/activity/vanilla/homecoming/prologue.h"
 #include "client/activity/campaign_dialogue.h"
 #include "client/activity/mission_launch_options.h"
 #include "client/activity/campaign_openings.h"
@@ -20,6 +21,7 @@
 namespace {
 namespace launch = dawn::client::activity::mission_launch;
 namespace intro = dawn::state::activity::gateway_intro;
+namespace prologue = dawn::state::activity::vanilla::homecoming::prologue;
 namespace forced = dawn::state::activity::forced;
 namespace prelaunch = forced::prelaunch;
 namespace build = dawn::state::build_data;
@@ -54,12 +56,13 @@ std::uintptr_t __fastcall record(std::uint32_t member) {
 }
 void* __fastcall construct(void* buffer, std::uint32_t slot, std::int16_t index) {
     check(slot == 0 && (index == static_cast<std::int16_t>(launch::snapshot().index)
-        || (launch::snapshot().index==292 && index>=289 && index<=291)), "construct selected native activity or Gateway cutscene");
+        || (launch::snapshot().index==292 && index>=289 && index<=291)
+        || (launch::snapshot().index==prologue::kMission && index==prologue::kVideo)), "construct selected native activity or an opening cutscene");
     put(static_cast<std::byte*>(buffer), 2, index); put(static_cast<std::byte*>(buffer), 4, index); return buffer;
 }
 bool __fastcall valid(const void*) { return g_descriptorValid; }
 const char* __fastcall name(std::int16_t index) {
-    if(index==289 || index==290) return "";
+    if(index==289 || index==290 || index==prologue::kVideo) return "";
     if(index==291) return "cine_120_frn";
     for(const auto& entry:launch::openings::kMissions) if(entry.activity==index) return entry.destination.packageName.data();
     if (const auto* variant = dawn::state::activity::strikes::find(index)) { return variant->package.data(); }
@@ -71,6 +74,15 @@ void __fastcall select(std::uint8_t slot, const void* buffer) {
     std::int16_t source{}, target{};
     std::memcpy(&source, static_cast<const std::byte*>(buffer) + 2, sizeof(source));
     std::memcpy(&target, static_cast<const std::byte*>(buffer) + 4, sizeof(target));
+    if(target==prologue::kVideo) {
+        check(g_dialogueActivity==-1,"mission loading dialogue waits for the opening video");
+        forced::ForcedDestination selected{};forced::snapshot(selected);
+        check(forced::active(selected) && launch::destination_name(selected)=="mission_towerfall","the mission opening is published before its video");
+        auto video=descriptor(target,"");
+        check(!forced::apply(video),"the opening video keeps its native destination");
+        check(source==target,"video selection preserves native identity");
+        g_submitted=descriptor(target,name(target));return;
+    }
     if(target>=289 && target<=291) {
         check(g_dialogueActivity==-1,"mission loading dialogue waits for all three cutscenes");
         forced::ForcedDestination selected{};forced::snapshot(selected);
@@ -146,6 +158,33 @@ void finish_intro() {
     put(g_manager.data(),0x18+0x182C0+0x148+4,std::int16_t{292});
     put(g_manager.data(),0x18+0x182C0+0x378,std::uint8_t{0});
     launch::poll();check(g_step==28,"native committed Gateway selection tears down briefing");
+}
+void finish_prologue() {
+    check(launch::snapshot().status==launch::Status::cinematics && g_submitted.activityIndex==prologue::kVideo,"Homecoming starts with the opening video");
+    const auto before=g_selects;
+    g_step=39;g_videoIndex=prologue::kVideo;g_finished=true;g_videoPlaying=false;launch::poll();
+    check(prologue::state().phase==prologue::Phase::videoLoading,"stale completion cannot finish the opening video");
+    g_finished=false;g_videoPlaying=true;launch::poll();
+    check(prologue::state().phase==prologue::Phase::videoPlaying,"native playback of the opening video is observed");
+    g_now+=150000;launch::poll();
+    check(g_selects==before && launch::snapshot().busy,"the full-length opening does not consume the mission arrival timeout");
+    g_videoPlaying=false;g_finished=true;launch::poll();
+    check(prologue::state().phase==prologue::Phase::videoReturning && g_selects==before,"opening completion waits for native cleanup");
+    g_step=29;launch::poll();g_now+=1000;launch::poll();
+    check(g_selects==before && launch::snapshot().busy,"the native chain owns the mission selection through its orbit step");
+    // Replay the native chain: retail selects the mission from the video, the published
+    // opening applies to that selection, and the roster receipt binds the run.
+    auto chained=descriptor(prologue::kMission,"mission_towerfall");chained.previousActivityIndex=prologue::kVideo;chained.reason=5;
+    check(forced::apply(chained) && chained.hasArrivalBubbleOverride && chained.arrivalBubbleOverride==9
+        && chained.hasSliceSetOverride && chained.sliceSetOverride==72,"the chained mission receives the authored opening coordinates");
+    ++g_session;g_step=33;prologue::selected(g_session,prologue::kMission,dawn::state::activity::vanilla::homecoming::kScenario,g_now);
+    launch::poll();
+    check(launch::snapshot().busy && !launch::snapshot().inMission && g_selects==before,"the chained mission keeps loading without a competing selection");
+    g_actual=chained;g_step=38;launch::poll();
+    const auto state=launch::snapshot();
+    check(state.status==launch::Status::arrived && !state.busy && state.inMission && state.current_name()=="mission_towerfall"
+        && prologue::state().phase==prologue::Phase::complete,"the chained arrival completes the Red War opening");
+    check(g_dialogueActivity==prologue::kMission,"arrival keeps the mission dialogue policy");
 }
 void arrive() {
     g_step = 33; launch::poll();
@@ -286,6 +325,15 @@ int main(int argc, char** argv) {
             check(launch::snapshot().status == launch::Status::preparing && g_selects == before,
                 "each authored profile waits for hooks");
             g_hooksReady = true; launch::poll();
+        }
+        if(launch::openings::kMissions[i].activity==prologue::kMission) {
+            check(g_selects==before+1 && g_commits==g_selects,"the opening video submits once");
+            finish_prologue();
+            launch::poll();check(launch::snapshot().inMission,"presence persists after the chained arrival");
+            check(!launch::request_opening(i),"in-mission launch blocked after the chained arrival");
+            orbit();check(!launch::snapshot().inMission && launch::snapshot().status==launch::Status::idle && g_dialogueActivity==-1,
+                "return to orbit resets the chained opening");
+            continue;
         }
         if(i==1) finish_intro();
         const auto expected=before+(i==1?2U:1U);

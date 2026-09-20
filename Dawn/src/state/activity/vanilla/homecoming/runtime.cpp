@@ -110,8 +110,6 @@ void observe_arrival(coo::Generation owner,std::uint8_t route) noexcept {
     }
 }
 bool observe_cinematic(const cinematics::Incident& e) noexcept {
-    // The Tower cinematic of the Red War opening plays in its own activity before the mission.
-    if(prologue::incident(mission_run_generation(),e,GetTickCount64())) {return true;}
     const std::lock_guard lock(mutex);
     if(!current()) {return false;}
     const auto accepted=controller.cinematic(controller.owner(),e,GetTickCount64());

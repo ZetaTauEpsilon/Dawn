@@ -61,13 +61,25 @@ std::uint64_t now() noexcept {
 }
 #include "gateway_intro_native.inl"
 namespace prologue = state::activity::vanilla::homecoming::prologue;
-/** @return True when the installed catalog carries the Tower cinematic activity and its scenario. */
+/** @return True when the installed catalog carries the opening video activity before Homecoming. */
 bool prologue_available() noexcept {
-    const auto rows = state::build_data::activities::entries();
-    state::build_data::scenarios::Definition approach{};
-    return rows.size() > static_cast<std::size_t>(prologue::kTowerCinematic)
-        && rows[prologue::kTowerCinematic].name() == prologue::kPackage
-        && state::build_data::find_scenario_layout(prologue::kPackage, approach) && approach.tag == prologue::kScenario;
+    return prologue::catalog_valid(state::build_data::activities::entries());
+}
+/** @return True when the loaded world is the requested opening with its authored arrival coordinates. */
+bool arrival_matches(const Snapshot& state, const state::activity::destination::DestinationSelection& actual,
+                     std::span<const state::build_data::activities::Definition> rows) noexcept {
+    if (state.index >= rows.size()) { return false; }
+    const auto expectedName = state.manual ? destination_name(state.destination) : rows[state.index].name();
+    return ((state.manual && !state.opening) || actual.activityIndex == static_cast<std::int16_t>(state.index))
+        && actual.packageNameLength == expectedName.size()
+        && std::memcmp(actual.packageName.data(), expectedName.data(), expectedName.size()) == 0
+        && (!state.manual || ((!state.destination.hasBubble || (actual.hasArrivalBubbleOverride
+            && actual.arrivalBubbleOverride == state.destination.bubble))
+            && (!state.destination.hasSliceSet || (actual.hasSliceSetOverride
+                && actual.sliceSetOverride == state.destination.sliceSet))
+            && (!state.destination.hasBubble || (actual.hasSpawnSetOverride
+                && actual.spawnSetOverride == (state.destination.hasSpawnSetHash
+                    ? state.destination.spawnSetHash : forced::kAbsentSpawnSetHash)))));
 }
 void finish(Status status) noexcept {
     AcquireSRWLockExclusive(&g_lock);
@@ -189,32 +201,29 @@ void poll() noexcept {
         if(!gateway_video_poll(base,currentStep)) {finish(Status::nativeUnavailable);return;}
         if(intro::wanted()<0) return;
     }
-    // The Red War opening: the Tower cinematic activity precedes Homecoming exactly like
-    // Gateway's briefing precedes its mission. Without the installed cinematic activity
-    // and scenario the mission launches directly.
+    // The Red War opening: the client plays the opening video activity and advances into
+    // Homecoming itself, exactly like Gateway's video chain. Without the installed video
+    // entry the mission launches directly.
     const bool homecoming=state.index==prologue::kMission && state.opening
         && (state.status==Status::cinematics || prologue_available());
     if(homecoming && state.status==Status::cinematics) {
         prologue::tick(now());
         if(prologue::state().phase==prologue::Phase::failed) {finish(Status::timedOut);return;}
+        if(!gateway_video_poll(base,currentStep,true)) {finish(Status::nativeUnavailable);return;}
+        if(prologue::state().phase==prologue::Phase::missionLoading) {
+            // Retail selected the mission from the video; the loaded world is the chain's arrival.
+            if(!inMission || sessionId==g_previousSession) return;
+            const bool matches=arrival_matches(state,actual,rows);
+            if(matches) prologue::complete();
+            finish(matches ? Status::arrived : Status::unexpectedDestination);return;
+        }
         if(prologue::wanted()<0) return;
     }
     if (state.status == Status::queued) {
-        if(gateway) gateway_depart(base,currentStep,intro::kMission);
-        if(homecoming) gateway_depart(base,currentStep,prologue::kMission);
+        if(gateway) gateway_depart(base,currentStep);
         g_leftOrbit = g_leftOrbit || currentStep != 29;
         if (g_leftOrbit && inMission && sessionId != g_previousSession && state.index < rows.size()) {
-            const auto expectedName = state.manual ? destination_name(state.destination) : rows[state.index].name();
-            const bool matches = ((state.manual && !state.opening) || actual.activityIndex == static_cast<std::int16_t>(state.index))
-                && actual.packageNameLength == expectedName.size()
-                && std::memcmp(actual.packageName.data(), expectedName.data(), expectedName.size()) == 0
-                && (!state.manual || ((!state.destination.hasBubble || (actual.hasArrivalBubbleOverride
-                    && actual.arrivalBubbleOverride == state.destination.bubble))
-                    && (!state.destination.hasSliceSet || (actual.hasSliceSetOverride
-                        && actual.sliceSetOverride == state.destination.sliceSet))
-                    && (!state.destination.hasBubble || (actual.hasSpawnSetOverride
-                        && actual.spawnSetOverride == (state.destination.hasSpawnSetHash
-                            ? state.destination.spawnSetHash : forced::kAbsentSpawnSetHash)))));
+            const bool matches = arrival_matches(state, actual, rows);
             if(gateway && matches) intro::complete();
             if(homecoming && matches) prologue::complete();
             finish(matches ? Status::arrived : Status::unexpectedDestination); return;
@@ -249,8 +258,7 @@ void poll() noexcept {
     // Captured retail setup:orbit is 29. In-world exit/reclassification belongs to the native
     // activity lifecycle and is deliberately not synthesized by this UI request adapter.
     const bool departingBriefing=gateway && state.status==Status::cinematics && intro::wanted()==intro::kMission;
-    const bool departingPrologue=homecoming && state.status==Status::cinematics && prologue::wanted()==prologue::kMission;
-    if (currentStep != 29 && !((departingBriefing || departingPrologue) && currentStep==38)) { finish(Status::returnToOrbit); return; }
+    if (currentStep != 29 && !(departingBriefing && currentStep==38)) { finish(Status::returnToOrbit); return; }
     const auto world = resolve<World>(base,0xC03430,{0x40,0x56,0x48,0x83,0xEC,0x30,0x48,0x8B});
     const auto sessionReady = resolve<Ready>(base,0x1788810,{0x83,0xB9,0x6C,0x08,0x00,0x00,0x00,0x0F});
     const auto memberReady = resolve<Ready>(base,0x178D740,{0x4C,0x8B,0xC1,0x48,0x63,0x89,0x3C,0xE9});
@@ -280,7 +288,7 @@ void poll() noexcept {
         finish(Status::notReady); return;
     }
     const auto index = gateway ? (state.status==Status::cinematics ? intro::wanted() : intro::kIntroduction)
-        : homecoming ? (state.status==Status::cinematics ? prologue::wanted() : prologue::kTowerCinematic)
+        : homecoming ? (state.status==Status::cinematics ? prologue::wanted() : prologue::kVideo)
         : static_cast<std::int16_t>(state.index);
     std::array<char, 40> nativeName{};
     const auto package = reinterpret_cast<std::uintptr_t>(name(index));
@@ -317,15 +325,21 @@ void poll() noexcept {
         finish(Status::cinematics);return;
     }
     if(homecoming && index!=prologue::kMission) {
+        if(!gateway_video_reset(base)) {finish(Status::nativeUnavailable);return;}
         if(state.status!=Status::cinematics) {prologue::begin(now());forced::clear();}
         if(!prologue::queued(index,now())) {finish(Status::descriptorRejected);return;}
+        // The client advances the video into the mission itself, so the mission's opening
+        // coordinates are published now, scoped to the mission and its chain source.
+        if(!forced::publish_direct(state.destination,prologue::kMission,index)) {finish(Status::manualRejected);return;}
+        g_previousSession = state::activity::newest_joined_session();
+        g_leftOrbit = false;
         clear();select(0,selection.data());commit(1);
         std::array<char,96> line{};std::snprintf(line.data(),line.size(),"ev=homecoming stage=prologue_queued activity=%d",index);
         core::log::write(core::log::Channel::client,core::log::Level::info,line.data());
         finish(Status::cinematics);return;
     }
     std::uint64_t departureNonce{};
-    if(departingBriefing || departingPrologue) {
+    if(departingBriefing) {
         if(!gateway_nonce(session,departureNonce)) return;
         std::memcpy(selection.data()+0x10,&departureNonce,sizeof departureNonce);
         if(!valid(selection.data())) {finish(Status::descriptorRejected);return;}
@@ -346,9 +360,9 @@ void poll() noexcept {
         g_gatewayExit={session,departureNonce,state::activity::mission_run_generation(),true};
         AcquireSRWLockExclusive(&g_lock);g_requestedAt=now();ReleaseSRWLockExclusive(&g_lock);
     }
-    if(departingPrologue) {
+    if(homecoming && state.status==Status::cinematics) {
+        // The video ended in orbit without the native chain; the adapter's own launch follows.
         static_cast<void>(prologue::queued(index,now()));
-        g_gatewayExit={session,departureNonce,state::activity::mission_run_generation(),true};
         AcquireSRWLockExclusive(&g_lock);g_requestedAt=now();ReleaseSRWLockExclusive(&g_lock);
     }
     finish(Status::queued);

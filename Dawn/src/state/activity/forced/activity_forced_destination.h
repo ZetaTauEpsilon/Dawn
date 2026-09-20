@@ -16,7 +16,8 @@ namespace dawn::state::activity::forced {
 [[nodiscard]] bool publish(const ForcedDestination& value) noexcept;
 /**
  * Apply opening coordinates only to this activity's own native selection, or to the selection
- * retail chains into it from `chainSource`; preserve its descriptor.
+ * retail chains into it from `chainSource` (carrying that source or no previous activity);
+ * preserve its descriptor.
  */
 [[nodiscard]] bool publish_direct(const ForcedDestination& value, std::int16_t activity,
                                   std::int16_t chainSource = destination::kAbsentActivityIndex) noexcept;

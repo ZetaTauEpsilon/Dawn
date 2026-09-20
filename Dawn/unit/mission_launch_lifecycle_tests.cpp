@@ -177,6 +177,10 @@ void finish_prologue() {
     auto chained=descriptor(prologue::kMission,"mission_towerfall");chained.previousActivityIndex=prologue::kVideo;chained.reason=5;
     check(forced::apply(chained) && chained.hasArrivalBubbleOverride && chained.arrivalBubbleOverride==9
         && chained.hasSliceSetOverride && chained.sliceSetOverride==72,"the chained mission receives the authored opening coordinates");
+    auto sourceless=descriptor(prologue::kMission,"mission_towerfall");sourceless.previousActivityIndex=-1;sourceless.reason=5;
+    check(forced::apply(sourceless) && sourceless.arrivalBubbleOverride==9,"a chained selection without a previous activity is still the opening");
+    auto foreign=descriptor(prologue::kMission,"mission_towerfall");foreign.previousActivityIndex=282;
+    check(!forced::apply(foreign),"a selection from another activity keeps its native destination");
     ++g_session;g_step=33;prologue::selected(g_session,prologue::kMission,dawn::state::activity::vanilla::homecoming::kScenario,g_now);
     launch::poll();
     check(launch::snapshot().busy && !launch::snapshot().inMission && g_selects==before,"the chained mission keeps loading without a competing selection");

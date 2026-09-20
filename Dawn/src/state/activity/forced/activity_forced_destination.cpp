@@ -387,8 +387,11 @@ bool apply(destination::DestinationSelection& selection) noexcept {
     if (directActivity != destination::kAbsentActivityIndex) {
         const std::string_view incoming(reinterpret_cast<const char*>(selection.packageName.data()),
             selection.packageNameLength <= selection.packageName.size() ? selection.packageNameLength : 0);
+        // A selection retail chains from the published source may carry that source or no
+        // previous activity at all; the exact activity and package still gate the override.
         const bool chained = chainSource != destination::kAbsentActivityIndex
-            && selection.previousActivityIndex == chainSource;
+            && (selection.previousActivityIndex == chainSource
+                || selection.previousActivityIndex == destination::kAbsentActivityIndex);
         if (selection.activityIndex != directActivity
             || (selection.previousActivityIndex != directActivity && !chained)
             || incoming != std::string_view(value.packageName.data(), value.packageNameLength)) { return false; }

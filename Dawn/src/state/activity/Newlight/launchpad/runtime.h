@@ -36,6 +36,15 @@ bool commit_grant(const GrantRequest&,std::uint64_t,bool,void*,bool(*)(void*) no
 void observe_native_object(void*) noexcept;
 void observe_native_shutter(coo::Generation,std::uint32_t,bool placedAtDoor) noexcept;
 void observe_native_shutter_gate(void*) noexcept;
+struct LightingSceneCommand {
+    coo::Generation owner{};std::uint32_t revision{};
+    friend bool operator==(const LightingSceneCommand&,const LightingSceneCommand&)=default;
+};
+LightingSceneCommand lighting_scene_command() noexcept;
+// Remember the placed scene after native initialization; trigger it from the
+// logical switch's native position command, not a dormant scene's own tick.
+void observe_native_lighting_scene(void*) noexcept;
+void apply_native_lighting_switch(void*,float,char) noexcept;
 void poll_native_objects() noexcept;
 void finish_handoff(coo::Generation) noexcept;
 }

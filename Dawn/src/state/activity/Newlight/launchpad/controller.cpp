@@ -1,4 +1,5 @@
 #include "controller.h"
+#include "lighting.h"
 #include "navigation.h"
 #include <bit>
 #include <cmath>
@@ -154,7 +155,7 @@ bool Controller::device(coo::Generation gen,coo::Asset a,const middleware::bap::
     s.generation=next;s.deviceSynchronized=true;++frame_.revision;return true;
 }
 bool Controller::lights(coo::Generation gen,const coo::ObjectReceipt& binding) noexcept {
-    const auto a=asset(kBreach,4,1);
+    const auto a=lighting::kSource;
     if(gen!=owner() || !frame_.enabled || !frame_.lightRequested || frame_.light || !frame_.ghost.atLights
         || binding.source!=a || !binding.valid() || objects_.owner(object_index(a))!=binding) {return false;}
     frame_.light=true;frame_.ghost.release_return();++frame_.revision;return true;
@@ -317,7 +318,7 @@ bool Controller::publish(const coo::Command& c) noexcept {
         if(s.asset==kModule) switch(static_cast<Mechanic>(s.argument)) {
         case Mechanic::next:phaseFinished_=true;return true;
         case Mechanic::light:
-            if(!frame_.ghost.atLights || !request(asset(kBreach,4,1),true)) {return false;}
+            if(!frame_.ghost.atLights || !request(lighting::kSource,true)) {return false;}
             frame_.lightRequested=true;++frame_.revision;return true;
         case Mechanic::shutter:
             return frame_.light && frame_.ghost.ready() && request(asset(kBreach,23,75),true,1.F);

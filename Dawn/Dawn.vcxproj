@@ -1801,6 +1801,8 @@
     <ClInclude Include="src\state\activity\Newlight\launchpad\ghost.h" />
     <ClInclude Include="src\state\activity\Newlight\launchpad\ghost_native.h" />
     <ClInclude Include="src\state\activity\Newlight\launchpad\lighting_native.h" />
+    <ClInclude Include="src\state\activity\Newlight\launchpad\lighting_placed.h" />
+    <ClInclude Include="src\state\activity\Newlight\launchpad\lighting_scene.h" />
     <ClInclude Include="src\state\activity\Newlight\launchpad\entrance_native.h" />
     <ClInclude Include="src\state\activity\Newlight\launchpad\performances.h" />
     <ClInclude Include="src\state\activity\Newlight\launchpad\entry.h" />

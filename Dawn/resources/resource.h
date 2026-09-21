@@ -10,10 +10,10 @@
 #define IDR_LOGO_SHEET 104
 
 /** The four numeric fields of the version resource, in FILEVERSION order. */
-#define DAWN_VER_MAJOR 0
-#define DAWN_VER_MINOR 1
-#define DAWN_VER_PATCH 0
+#define DAWN_VER_MAJOR 1
+#define DAWN_VER_MINOR 7
+#define DAWN_VER_PATCH 1
 #define DAWN_VER_BUILD 0
 /** The same version as display text. Windows shows this string, not the four fields. */
-#define DAWN_VER_STRING "0.1.0.0"
-#define DAWN_DISPLAY_VERSION "v.01"
+#define DAWN_VER_STRING "1.7.1.0"
+#define DAWN_DISPLAY_VERSION "v1.7.1"

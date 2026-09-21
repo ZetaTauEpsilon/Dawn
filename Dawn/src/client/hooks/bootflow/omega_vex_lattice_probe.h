@@ -17,6 +17,7 @@
 #include "homecoming_entrance.h"
 #include "../../../state/activity/vanilla/homecoming/runtime.h"
 #include "../../../state/activity/vanilla/homecoming/ship_barrier.h"
+#include "../../../state/activity/Newlight/launchpad/runtime.h"
 
 namespace dawn::client::hooks::bootflow::omega_vex_lattice_probe {
 namespace detail {
@@ -160,6 +161,12 @@ __declspec(noinline) inline std::uint64_t __fastcall position(
     State before{},after{};
     const bool matched=call.accepts_side_effects() && snapshot(device,before);
     const auto result=hooking::await_original(positionOriginal)(device,requested,snap);
+    std::array<std::uint32_t,4> identity{};
+    if(call.accepts_side_effects() && requested==1.F && snap==1
+        && copy_bytes(device,identity.data(),sizeof identity)
+        && identity==std::array<std::uint32_t,4>{0x80C7069BU,0x80803910U,0xA78U,0}) {
+        state::activity::newlight::launchpad::apply_native_lighting_switch(device,requested,snap);
+    }
     if(call.accepts_side_effects() && matched && snapshot(device,after) && before.self==after.self) {
         receipt("position_worker",device,after,&before,caller,requested,snap,true);
     }
@@ -181,6 +188,13 @@ __declspec(noinline) inline std::uint8_t __fastcall tick(std::byte* device,const
     const auto result=hooking::await_original(tickOriginal)(device,context);
     const bool barrierPending=call.accepts_side_effects()
         && state::activity::vanilla::homecoming::update_ship_barrier(device);
+    // Observe AFTER native initialization. A dormant device's own tick is not
+    // a command-delivery mechanism; retain a validated weak binding instead.
+    std::array<std::uint32_t,4> identity{};
+    if(call.accepts_side_effects() && copy_bytes(device,identity.data(),sizeof identity)
+        && identity==std::array<std::uint32_t,4>{0x80FA2F0AU,0x80803910U,0xA78U,0}) {
+        state::activity::newlight::launchpad::observe_native_lighting_scene(device);
+    }
     if(call.accepts_side_effects() && matched && snapshot(device,after) && before.self==after.self) {
         receipt("tick_after",device,after,&before,caller,0,0,!before.initialized);
     }
@@ -223,11 +237,13 @@ inline bool uninstall() noexcept {
     using namespace detail;
     quiesce();
     if(!handles[0].attached && !handles[1].attached) { return true; }
-    const std::array<hooking::detour::ProtectedCodeEntry,7> entries{{
+    const std::array<hooking::detour::ProtectedCodeEntry,9> entries{{
         {reinterpret_cast<void*>(&position)},{reinterpret_cast<void*>(&tick)},
         {reinterpret_cast<void*>(&one_au_entrance::update)},
         {reinterpret_cast<void*>(&homecoming_entrance::update)},
         {reinterpret_cast<void*>(&state::activity::vanilla::homecoming::update_ship_barrier)},
+        {reinterpret_cast<void*>(&state::activity::newlight::launchpad::apply_native_lighting_switch)},
+        {reinterpret_cast<void*>(&state::activity::newlight::launchpad::observe_native_lighting_scene)},
         {reinterpret_cast<void*>(&hooking::call_gate_detail::enter)},
         {reinterpret_cast<void*>(&hooking::call_gate_detail::leave)}}};
     if(hooking::detour::uninstall(handles,entries,&idle)!=hooking::detour::UninstallResult::removed) {

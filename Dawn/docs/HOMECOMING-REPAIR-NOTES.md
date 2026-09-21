@@ -1124,3 +1124,38 @@ and scripts were left unchanged. No relaunch, live write, push or release.
 Receipt: build/coo/homecoming-proximity-exodus-fade-20260920/installation.json.
 Backup: C:/Destiny 2 Development/.dawn/backups/homecoming-proximity-exodus-fade-20260920-184710.
 Gameplay acceptance remains pending a new run.
+
+## Opening-area periodic hitch: legacy pool probes (2026-09-21)
+
+Read-only captures of PID 6212 (installed DLL SHA256
+61DB06D52882B2376C70CB9949EF5BA3836927920495F009A5627B677093A537)
+showed a roughly 125 ms hitch cadence while the opening's objects were loaded.
+The same type-68 directive wrapper had roughly 31 ms pre/post log intervals
+there, then mostly zero-tick intervals after those objects unloaded. Returning
+loaded all five legacy probe targets again and restored the slow intervals even
+with the later objective still active. The user withdrew the initial report
+that returning to the opening stayed smooth. Logs have coarse tick resolution;
+these measurements do not isolate the native apply from its diagnostic wrapper.
+
+Normal builds now skip the old Tower Watch scene/spawner pool snapshots in both
+the directive apply and periodic dialogue scan. These snapshots are diagnostic
+only, invoke native lookup functions, and are not needed for mission receipts.
+An explicit DAWN_ENABLE_TOWER_WATCH_SLOT_PROBES=1 diagnostic build can restore
+them. The policy short-circuits before even qualifying the forced destination.
+Native apply/scan forwarding, adventure feedback, opening dialogue handoff,
+publication cadence, doors, actors, waves, and objective contents are unchanged.
+
+Operation-count tests cover disabled probes across 1000 updates, opt-in probes,
+and exclusion of other missions. Captures and build/test logs are retained in
+build/coo/homecoming-fps-20260921. A fresh gameplay capture with the candidate
+is required before calling the FPS improvement verified. No live patch is used.
+
+Validation: Homecoming Debug and Release each passed 155840 checks; the Release
+DLL built with zero warnings/errors. The legacy pool-probe trace is absent from
+the binary; opening dialogue-handoff and directive traces remain. Candidate
+SHA256: 28F6E7B8DF7E816002A000D92BDAB03CC14C1477F84F2AE2FCBC6A8D83654054.
+Staged in build/coo/homecoming-slot-probe-fix-20260921, then installed while the
+game was closed at 09:43 EDT. Root and bin/x64 DLL/PDB pairs were backed up and
+hash-verified; no scripts/settings changed and no relaunch occurred. See that
+stage's installation.json for the backup and file hashes. Gameplay performance
+acceptance is still pending; disabling the suspect probe is not an A/B proof.

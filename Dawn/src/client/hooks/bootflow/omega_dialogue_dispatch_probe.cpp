@@ -38,6 +38,7 @@
 #include "omega_enemy_lair_receipts.h"
 #include "omega_dialogue_bank.h"
 #include "gate_trace_cache.h"
+#include "tower_watch_probe_policy.h"
 #include "adventure_cue_observer.h"
 #include "adventure_dialogue_observer.h"
 #include "omega_teardown_native.h"
@@ -1084,7 +1085,7 @@ __declspec(noinline) void __fastcall dialogue_scan(std::byte* component) noexcep
     // The cue apply is synchronous, but local scene/spawner activation may be deferred to a
     // later component update. Sample the exact Tower Watch candidates periodically and emit only
     // when their pool or runtime fingerprint changes.
-    if ((count & 0xFFU) == 1U && tower_watch_forced()) {
+    if ((count & 0xFFU) == 1U && tower_watch_probe::active(tower_watch_forced)) {
         report_tower_watch_slots("followup_change",
                                  0U,
                                  0U,
@@ -1537,7 +1538,8 @@ __declspec(noinline) void __fastcall directive_apply(std::byte* component,
     if (component != nullptr && verbose) {
         log_directive("apply_pre", component, count);
     }
-    const bool inspectTowerWatch = component != nullptr && tower_watch_forced();
+    const bool inspectTowerWatch = component != nullptr
+                                  && tower_watch_probe::active(tower_watch_forced);
     const std::uint32_t cueBefore = inspectTowerWatch
                                         ? read_value<std::uint32_t>(component + 0x190U)
                                         : 0U;

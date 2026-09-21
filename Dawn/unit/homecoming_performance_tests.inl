@@ -1,5 +1,24 @@
+#include "client/hooks/bootflow/tower_watch_probe_policy.h"
+
 // Operation-count regressions, not timing thresholds: deterministic even on CI.
 static void performance_regressions() {
+    namespace slotProbe=dawn::client::hooks::bootflow::tower_watch_probe;
+    unsigned probeQualifications{},poolSnapshots{};
+    const auto inOpening=[&]() noexcept {++probeQualifications;return true;};
+    for(unsigned apply=0;apply<1000;++apply) {
+        if(slotProbe::active<false>(inOpening)) ++poolSnapshots;
+    }
+    check(probeQualifications==0 && poolSnapshots==0,
+        "disabled legacy probes perform no Homecoming qualification or pool snapshots, including revisits");
+    check(slotProbe::active<true>(inOpening) && probeQualifications==1,
+        "an explicitly enabled diagnostic build can still sample the opening");
+    check(!slotProbe::active<true>([]() noexcept {return false;}),
+        "diagnostic opt-in never samples another mission");
+#if !defined(DAWN_ENABLE_TOWER_WATCH_SLOT_PROBES) || !DAWN_ENABLE_TOWER_WATCH_SLOT_PROBES
+    static_assert(!slotProbe::kEnabled,"normal builds must not invoke legacy Tower Watch pool probes");
+    check(!slotProbe::active(inOpening) && probeQualifications==1,
+        "the default policy short-circuits before native pool lookups");
+#endif
     using dawn::client::hooks::bootflow::GateTraceCache;
     using dawn::client::hooks::bootflow::GateTraceSample;
     GateTraceCache<> cache;

@@ -14,6 +14,8 @@
 #include "../activity_message/forest_loot_pickups.h"
 #include "../push/activity/activity_keepalive_push.h"
 #include "../push/activity/launchpad_inventory.h"
+#include "../push/activity/homecoming_inventory.h"
+#include "../push/activity/adieu_inventory.h"
 #include "../push/activity/newlight_quest.h"
 #include "../push/activity/quest_progress.h"
 #include "../../../../state/activity/nightfall/rules.h"
@@ -358,6 +360,8 @@ bool consume_deferred(Session& session,
         return consume_banner_repush(session, scratch, response, written, touchesScratch)
                || push::activity::newlight_quest::consume(session, scratch, response, written, touchesScratch)
                || push::activity::launchpad_inventory::consume(session, scratch, response, written, touchesScratch)
+               || push::activity::homecoming_inventory::consume(session, scratch, response, written, touchesScratch)
+               || push::activity::adieu_inventory::consume(session, scratch, response, written, touchesScratch)
                || push::activity::quest_progress::consume(session, scratch, response, written, touchesScratch)
                || push::activity::consume_activity_keepalive(
                    session, scratch, response, written, touchesScratch);

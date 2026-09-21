@@ -28,7 +28,7 @@ inline std::size_t body_bits(const Frame& f,std::uint32_t key,std::uint8_t type,
 }
 template<class Writer> bool write_body(Writer& w,const Frame& f,std::uint32_t key,std::uint8_t type,std::uint16_t slot) noexcept {
     if(!body_bits(f,key,type,slot)) { return false; }
-    if(key==kRoot) { return type==53?coo::native_presentation::dialogue(w,f.generations,f.activeRow):coo::native_presentation::objective(w,f.presentation,{},false,true); }
+    if(key==kRoot) { return type==53?coo::native_presentation::dialogue(w,f.generations,f.activeRow):coo::native_presentation::waypoint_objective(w,f.presentation); }
     if(key==kAlleysA && type==1 && slot==34) {
         // One authored member owns this Skiff; never issue a duplicate loose spawn.
         coo::native_combatant::Source ship{key,f.spawnGeneration,0,0,{},0,false,false};

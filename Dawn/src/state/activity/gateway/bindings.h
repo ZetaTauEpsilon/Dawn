@@ -100,7 +100,7 @@ inline constexpr coo::script::ModuleCapability kModules[]{{"opening",{kModule,1}
 inline constexpr coo::script::FactCapability kFacts[]{{"opening.checked",0}};
 // Beacon references use existing entity providers. They do not create objects.
 inline constexpr coo::script::MarkerCapability kMarkers[]{
-    {"forest_gate",{{0x4B946B28U,0x80F46F17U,4,28},{}}},
+    {"forest_gate",{{0x4B946B28U,0x80F46EC0U,60,448},{}}},
     {"lighthouse_portal",{{0x4B946B28U,0x80F46F11U,4,26},{}}},
     {"module",{{0x4B946B28U,0x80F46F23U,4,32},{}}},
     {"vance",{{0xBA0B27A0U,0x80F46DDDU,1,4},{}}}

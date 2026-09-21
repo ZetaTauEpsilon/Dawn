@@ -20,7 +20,7 @@ inline std::size_t body_bits(const Frame& f,std::uint32_t key,std::uint8_t type,
 template<class Writer> bool write_body(Writer& w,const Frame& f,std::uint32_t key,std::uint8_t type,std::uint16_t slot) noexcept {
     if(!body_bits(f,key,type,slot)) {return false;}const auto a=find(key,type,slot)->asset;
     if(a==kDialogueAsset) {return coo::native_presentation::dialogue(w,f.generations,f.activeRow);}
-    if(type==68) {return coo::native_presentation::objective(w,f.presentation,{},false,true);}
+    if(type==68) {return coo::native_presentation::waypoint_objective(w,f.presentation);}
     if(type==65) {
         for(std::size_t i=0;i<2;++i) {if(a==kScans[i].link) {
             const bool active=f.scanArmed[i] && !f.scanComplete[i] && !f.finished;

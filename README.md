@@ -12,6 +12,8 @@ Install a packaged release over an existing game installation using the bundled 
 
 [Release notes and checksum](https://github.com/isinternets/Dawn/releases/tag/v0.1.5.1)
 
+**Preview: [Dawn 1.7 Preview 1 — Adieu, Homecoming, and mission guidance](https://github.com/isinternets/Dawn/releases/tag/v1.7-preview.1)**
+
 </div>
 
 ---

@@ -64,22 +64,54 @@ template<class World> bool unchanged(World& world,const Row& row) noexcept {
     return world.stable() && world.row(row.entity&0x1FFFU,fresh) && fresh==row;
 }
 struct Result {unsigned doors{},rows{},matches{};};
+inline bool eligible(const EntranceRequest& wanted) noexcept {
+    return wanted.enabled() && wanted.section>=static_cast<std::uint8_t>(Section::military);
+}
+// Callback-local repair is immediate. The fallback discovers streaming devices
+// that have not ticked yet, at most twice per second for an unchanged world.
+// This schedules discovery only; it never advances a mission or a door animation.
+struct SweepGate {
+    static constexpr std::uint64_t kIntervalMs=500;
+    EntranceRequest request{};
+    std::uintptr_t table{};
+    std::uint64_t last{};
+    bool primed{};
+    void reset() noexcept {*this={};}
+    bool due(const EntranceRequest& wanted,std::uintptr_t currentTable,std::uint64_t now) noexcept {
+        if(!eligible(wanted) || !currentTable) {reset();return false;}
+        if(primed && request==wanted && table==currentTable && now>=last && now-last<kIntervalMs) return false;
+        request=wanted;table=currentTable;last=now;primed=true;return true;
+    }
+};
+template<class World,class Current>
+void repair_row(World& world,const EntranceRequest& wanted,const Row& row,Current&& current,Result& result) noexcept {
+    bool owned{};
+    if(!row.live(row.entity&0x1FFFU) || !door(row,wanted.section) || !world.owned(row.entity,owned)) return;
+    ++result.matches;
+    if(owned || !unchanged(world,row) || !world.owned(row.entity,owned) || owned || current()!=wanted) return;
+    // Do not write device position, locks, power, proximity or animation.
+    world.grant(row.entity);++result.doors;
+}
+template<class World,class Current>
+Result repair_callback(World& world,const EntranceRequest& wanted,std::uint32_t entity,Current&& current) noexcept {
+    Result result{};Row row{};
+    if(!eligible(wanted) || entity==UINT32_MAX || !world.row(entity&0x1FFFU,row)) return result;
+    ++result.rows;
+    // A recycled slot must not redirect a callback to a different live entity.
+    if(row.entity==entity) repair_row(world,wanted,row,current,result);
+    return result;
+}
 // Invoked within the existing device callback lifetime, never on a timer.
 // World supplies checked native reads and engine calls; tests use synthetic rows.
 template<class World,class Current>
 Result repair(World& world,const EntranceRequest& wanted,Current&& current) noexcept {
     Result result{};
-    if(!wanted.enabled()) return result;
+    if(!eligible(wanted)) return result;
     for(std::size_t slot=0;slot<kRows;++slot) {
-        Row row{};bool owned{};
+        Row row{};
         if(!world.row(slot,row)) continue;
         ++result.rows;
-        if(!row.live(slot) || !door(row,wanted.section) || !world.owned(row.entity,owned)) continue;
-        ++result.matches;
-        if(owned) continue;
-        if(!unchanged(world,row) || !world.owned(row.entity,owned) || owned || current()!=wanted) continue;
-        // Do not write device position, locks, power, proximity or animation.
-        world.grant(row.entity);++result.doors;
+        if(row.live(slot)) repair_row(world,wanted,row,current,result);
     }
     return result;
 }

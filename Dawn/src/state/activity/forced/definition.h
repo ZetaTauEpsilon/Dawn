@@ -56,6 +56,15 @@ struct ForcedDestination {
 }
 
 namespace profiles {
+// Adieu starts with the vision cinematic before the wounded city arrival.
+constexpr ForcedDestination adieu_opening() noexcept {
+    ForcedDestination v{};constexpr char name[]="mission_journey";
+    for(std::size_t i=0;i<sizeof(name)-1;++i) v.packageName[i]=name[i];
+    v.packageNameLength=sizeof(name)-1;v.bubble=3;v.sliceSet=25;v.spawnSetHash=kAbsentSpawnSetHash;
+    v.hasBubble=v.hasSliceSet=v.enabled=true;return v;
+}
+inline constexpr auto kAdieuOpening=adieu_opening();
+static_assert(active(kAdieuOpening));
 
 // Launchpad begins outside the Wall. Its default spawn is inside the Breach.
 constexpr ForcedDestination launchpad_opening() noexcept {

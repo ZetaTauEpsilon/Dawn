@@ -1,6 +1,7 @@
 #include "../../../../../state/activity/Newlight/launchpad/transit.h"
 #include "../../../../../state/activity/vanilla/one_au/transit.h"
 #include "../../../../../state/activity/vanilla/homecoming/transit.h"
+#include "../../../../../state/activity/vanilla/adieu/transit.h"
 #include "../../../../../state/activity/vanilla/homecoming/prologue.h"
 #include "activity_membership_push.h"
 
@@ -135,6 +136,18 @@ make_wire_snapshot(state::activity::ActivityInstanceKey activity,
         name=="mission_towerfall" && layout.tag==state::activity::vanilla::homecoming::kScenario,nativeTransit);
     if(homecomingTransit.publish) {terminal=homecomingTransit;}
     if(name=="mission_towerfall" && layout.tag==state::activity::vanilla::homecoming::kScenario) {
+        const auto leg=[](const auto& v) {
+            return middleware::bap::activity_message::replicate_membership::RegionLeg{
+                v.sliceSetIndex,v.sliceSetHash,v.regionIndex,v.publicState,v.auxState,v.present};
+        };
+        wire.currentLeg=leg(snapshot.currentLeg);wire.pendingLeg=leg(snapshot.pendingLeg);
+        wire.localAmbassador=true;
+    }
+    const auto adieuTransit=state::activity::vanilla::adieu::transit::project(activity,
+        state::activity::mission_run_generation(),snapshot.identity.memberKey,
+        name=="mission_journey" && layout.tag==state::activity::vanilla::adieu::kScenario,nativeTransit);
+    if(adieuTransit.publish) {terminal=adieuTransit;}
+    if(name=="mission_journey" && layout.tag==state::activity::vanilla::adieu::kScenario) {
         const auto leg=[](const auto& v) {
             return middleware::bap::activity_message::replicate_membership::RegionLeg{
                 v.sliceSetIndex,v.sliceSetHash,v.regionIndex,v.publicState,v.auxState,v.present};

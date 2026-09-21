@@ -2,6 +2,7 @@
 #include "../../../../state/activity/vanilla/one_au/runtime.h"
 #include "../../../../state/activity/vanilla/one_au/sense_adapter.h"
 #include "../../../../state/activity/vanilla/homecoming/runtime.h"
+#include "../../../../state/activity/vanilla/adieu/runtime.h"
 #include "../../../../state/activity/vanilla/homecoming/sense_adapter.h"
 #include "../../../../middleware/encoding/bit_reader.h"
 #include "activity_message_route.h"
@@ -737,6 +738,18 @@ void report_sense_update(Session& session, const service::Request& request) noex
                 if(object.hasObjectOutput) {state::activity::vanilla::homecoming::observe_use(object.registryKey,object.slotType,object.slotIndex,object.objectOutput);}
                 if(object.hasDeviceOutput) {state::activity::vanilla::homecoming::observe_device(object.registryKey,object.slotType,object.slotIndex,object.deviceOutput);}
                 if(object.hasGhostOutput) {state::activity::vanilla::homecoming::observe_ghost(object.registryKey,object.slotType,object.slotIndex,object.ghostOutput);}
+                if(object.hasSceneOutput) {state::activity::vanilla::homecoming::observe_scene(state::activity::vanilla::homecoming::native_run(),object.registryKey,object.slotIndex,object.sceneOutput);}
+            }
+        }
+    }
+    if(parsed && handleBound && epochBound) {
+        state::activity::destination::DestinationSelection selection{};
+        if(state::activity::destination::snapshot(session.activity.instance,selection)
+            && std::string_view(reinterpret_cast<const char*>(selection.packageName.data()),selection.packageNameLength)=="mission_journey") {
+            for(std::size_t i=0;i<update.objectCount;++i) {const auto& object=update.objects[i];
+                if(object.hasSquadOutput) {state::activity::vanilla::adieu::observe_source(object.registryKey,object.slotType,object.slotIndex,state::activity::vanilla::homecoming::source_output(object.squadOutput));}
+                if(object.hasObjectOutput) {state::activity::vanilla::adieu::observe_use(object.registryKey,object.slotType,object.slotIndex,object.objectOutput);}
+                if(object.hasSceneOutput) {state::activity::vanilla::adieu::observe_scene(state::activity::vanilla::adieu::native_run(),object.registryKey,object.slotIndex,object.sceneOutput);}
             }
         }
     }
@@ -1278,7 +1291,12 @@ void report_incident(const service::Request& request,bool liveBinding,
     const bool homecomingAccepted=liveBinding && verdict==incident::Verdict::accepted && parsed.hasPayload
         && state::activity::vanilla::homecoming::cinematics::decode(homecomingMovieReader,homecomingMovie)
         && state::activity::vanilla::homecoming::observe_cinematic(homecomingMovie);
-    const bool skipAccepted=skipRequested && (launchpadAccepted || oneAuAccepted || homecomingAccepted || ending::request_skip(state::activity::mission_run_generation()));
+    state::activity::vanilla::adieu::cinematics::Incident adieuMovie{};
+    middleware::encoding::bits::Reader adieuMovieReader(request.payload);
+    const bool adieuAccepted=liveBinding && verdict==incident::Verdict::accepted && parsed.hasPayload
+        && state::activity::vanilla::adieu::cinematics::decode(adieuMovieReader,adieuMovie)
+        && state::activity::vanilla::adieu::observe_cinematic(adieuMovie);
+    const bool skipAccepted=skipRequested && (launchpadAccepted || oneAuAccepted || homecomingAccepted || adieuAccepted || ending::request_skip(state::activity::mission_run_generation()));
     std::array<char, core::log::kLineCapacity> line{};
     const int written = std::snprintf(line.data(),
                                       line.size(),

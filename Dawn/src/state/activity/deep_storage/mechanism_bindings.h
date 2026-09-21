@@ -2,6 +2,7 @@
 #include "native_catalog.h"
 #include "mechanism_catalog.h"
 #include "../coo/objective_service.h"
+#include "navigation.h"
 namespace dawn::state::activity::deep_storage {
 struct PlateBinding { coo::Asset source,volume;float chargeSeconds; };
 // VIDEO estimates; native 815B8B3B owns progress and the completion latch.
@@ -19,10 +20,7 @@ inline constexpr ScanBinding kScans[]{
 // Its locator resolves the entrance plate across native destination contexts.
 // Interaction markers use their scoped native sources.
 inline constexpr coo::MarkerTarget marker(std::uint32_t event) noexcept {
-    if(event==kObjectives[0].event) {return {{0x4324A238U,0x80B5616BU,47,4},{0x2D7B770FU,0x22723FADU,0x4324A238U,0x22BCA6B6U}};}
-    if(event==kObjectives[1].event || event==kObjectives[2].event) {return {kScans[0].source,{}};}
-    if(event==kObjectives[8].event) {return {kScans[1].source,{}};}
-    return {};
+    return navigation::marker(event);
 }
 float device_position(coo::Asset,bool) noexcept;
 }

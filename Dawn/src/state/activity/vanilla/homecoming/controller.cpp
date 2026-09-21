@@ -41,7 +41,7 @@ bool crosses(const Volume& v,Point from,Point to) noexcept {
 void Controller::reset() noexcept {
     executor_.cancel(*this);lifecycle_.reset();clock_.reset();run_=now_=0;arrived_=started_=phaseFinished_=false;
     objectives_={};dialogue_={};objects_={};population_={};seen_.reset();inside_.reset();hasPosition_=false;previousPosition_={};
-    submitted_.reset();voiceEnd_={};clearedSince_={};requestedAt_={};cinematics_={};frame_={};
+    submitted_.reset();voiceEnd_={};sceneVoiceUntil_=0;clearedSince_={};requestedAt_={};cinematics_={};frame_={};
 }
 bool Controller::select(std::uint64_t run,std::uint64_t now) noexcept {
     if(run && run_==run) {return true;}reset();
@@ -57,7 +57,7 @@ bool Controller::fly_in_complete(coo::Generation gen) noexcept {
 }
 bool Controller::arrival(coo::Generation gen,std::uint8_t route,std::uint64_t now) noexcept {
     const bool accepted=cinematics_.arrival(gen,route,now);
-    if(accepted) {frame_.cinematic=cinematics_.state();++frame_.revision;}return accepted;
+    if(accepted) {frame_.cinematic=cinematics_.state();hasPosition_=false;inside_.reset();++frame_.revision;}return accepted;
 }
 bool Controller::cinematic(coo::Generation gen,const cinematics::Incident& e,std::uint64_t now) noexcept {
     const bool accepted=cinematics_.incident(gen,e.target,e.registry,e.type,e.slot,e.runtime,now);
@@ -72,15 +72,20 @@ bool Controller::mounted(const MountedPosition& sample) noexcept {
     position(sample.owner.run,sample.position);return true;
 }
 void Controller::position(std::uint64_t run,Point p) noexcept {
-    if(!run_ || run!=run_ || frame_.finished || !std::isfinite(p.x) || !std::isfinite(p.y) || !std::isfinite(p.z)) {return;}
+    if(!run_ || run!=run_ || frame_.finished || frame_.cinematic.phase!=cinematics::Phase::gameplay
+        || !std::isfinite(p.x) || !std::isfinite(p.y) || !std::isfinite(p.z)) {return;}
+    const auto local=[&](const Volume& v) {
+        for(const auto& g:kGroups) {if(g.key==v.asset.registry) {return g.bubble==bubble_of(static_cast<Section>(frame_.section));}}
+        return false;
+    };
     inside_.reset();
-    for(std::size_t i=0;i<std::size(kVolumes);++i) {if(contains(kVolumes[i],p)) {inside_.set(i);}}
+    for(std::size_t i=0;i<std::size(kVolumes);++i) {if(local(kVolumes[i]) && contains(kVolumes[i],p)) {inside_.set(i);}}
     if(arrived_) {
         seen_|=inside_;
         const double dx=double(p.x)-previousPosition_.x,dy=double(p.y)-previousPosition_.y,dz=double(p.z)-previousPosition_.z;
         // Loading/cinematic discontinuities are not a traversed route.
         if(hasPosition_ && dx*dx+dy*dy+dz*dz<=10000.) {
-            for(std::size_t i=0;i<std::size(kVolumes);++i) {if(!seen_[i] && crosses(kVolumes[i],previousPosition_,p)) {seen_.set(i);}}
+            for(std::size_t i=0;i<std::size(kVolumes);++i) {if(local(kVolumes[i]) && !seen_[i] && crosses(kVolumes[i],previousPosition_,p)) {seen_.set(i);}}
         }
     }
     previousPosition_=p;hasPosition_=true;
@@ -90,9 +95,11 @@ bool Controller::request(coo::Asset a,bool active,float position,float power,flo
     auto& s=frame_.native[i];
     if(a.type!=5 && s.managed && s.desired==active && s.position==position && s.power==power && s.lock==lock) {return true;}
     if(a.type==5) {if(s.sequenceRevision==254) {return false;}++s.sequenceRevision;}
-    s.snap=!s.managed || snap;
+    // First activation is still a transition: snapping it bypasses native
+    // interpolation/animation (DF6C70). Only an explicit reset may request snap.
+    s.snap=snap;
     if(!s.managed) {s.managed=true;s.generation=frame_.spawnGeneration;s.prepared=a.type!=4;}
-    else if(a.type!=1 && a.type!=4 && a.type!=5) {if(s.generation>=32766 || !lifecycle_.reserve_through(owner(),s.generation+1)) {return false;}++s.generation;}
+    else if(a.type!=1 && a.type!=4 && a.type!=5 && !(a.type==43 && !active)) {if(s.generation>=32766 || !lifecycle_.reserve_through(owner(),s.generation+1)) {return false;}++s.generation;}
     s.desired=active;s.position=position;s.power=power;s.lock=lock;s.acknowledged=false;
     if(a.type==23 && s.deviceSeen==7) {
         const auto next=static_cast<std::uint32_t>(*std::max_element(s.deviceVersions.begin(),s.deviceVersions.end()))+1U;
@@ -107,8 +114,14 @@ bool Controller::request(coo::Asset a,bool active,float position,float power,flo
             if(!lifecycle_.reserve_through(owner(),next) || !objects_.rearm(owner(),o,next)) {return false;}
             objects_.retire(o);s.observed=false;
         }
+        if(active && objects_.state(o).phase==coo::ObjectPhase::retired) {
+            const auto next=objects_.state(o).generation+1;
+            // Reactivation is a fresh prepare/create lease. An old object's use or presence
+            // cannot answer the new Ward, rocket, ghost or interactable.
+            if(!lifecycle_.reserve_through(owner(),next+1) || !objects_.rearm(owner(),o,next)) {return false;}
+            s.observed=false;
+        }
         const auto state=objects_.state(o);
-        if(active && state.phase==coo::ObjectPhase::retired) {return false;}
         s.generation=state.generation;s.prepared=state.phase>=coo::ObjectPhase::create;s.active=active && state.create;
     } else if(a.type==2) {s.active=active;s.bound=active;s.retired=false;}
     else {s.active=active;}
@@ -124,21 +137,28 @@ bool Controller::device(coo::Generation gen,coo::Asset a,const middleware::bap::
         if((d.present&(2U<<(n*2))) && (d.revisions[n]<0 || d.revisions[n]>=32766)) {return false;}
     }
     auto& s=frame_.native[i];
+    if((d.present&2U) && d.revisions[0]<s.observedRevision) {return false;}
     for(unsigned n=0;n<3;++n) {
         if(d.present&(2U<<(n*2))) {s.deviceVersions[n]=(std::max)(s.deviceVersions[n],d.revisions[n]);s.deviceSeen|=static_cast<std::uint8_t>(1U<<n);}
     }
     bool changed=false;
-    // The measured pose is the interpolated native position, never the commanded target.
-    if(d.present&2U) {if(d.revisions[0]>=s.observedRevision) {s.observedRevision=d.revisions[0];}}
+    // 80804F47 deltas omit unchanged fields independently. A revision-only
+    // receipt preserves the last measured float; clearing it strands a door
+    // already at its target after authority-version synchronization. Never
+    // substitute the commanded target for this measured value.
+    if(d.present&2U) {s.observedRevision=d.revisions[0];}
     if(d.present&1U) {s.observedPosition=d.values[0];s.poseKnown=true;}
     // Generator performer 80C23AA6 couples turbine destruction to position 0.4 (v32).
     for(std::size_t g=0;g<3;++g) {
-        if(a==asset(kShip,23,static_cast<std::uint16_t>(143+2*g)) && s.managed && s.poseKnown
+        if(a==asset(kShip,23,static_cast<std::uint16_t>(143+2*g)) && s.managed && s.active && s.poseKnown && s.deviceSynchronized
+            // Destruction advances the native device revision beyond setup.
+            // An old/unarmed terminal pose still cannot satisfy this lease.
+            && s.observedRevision>=static_cast<std::int32_t>(s.generation)
             && s.observedPosition>=.3999F && s.observedPosition<=.4001F && !frame_.generatorDown[g]) {frame_.generatorDown[g]=true;changed=true;}
     }
     if(s.managed && s.deviceSynchronized && !s.acknowledged && s.poseKnown && s.observedRevision>=0
         && static_cast<std::uint32_t>(s.observedRevision)==s.generation
-        && (std::abs(s.observedPosition-s.position)<.002F || (s.snap && !(d.present&1U)))) {s.acknowledged=true;changed=true;}
+        && std::abs(s.observedPosition-s.position)<.002F) {s.acknowledged=true;changed=true;}
     if(changed) {++frame_.revision;}
     if(!s.managed || s.deviceSynchronized || s.deviceSeen!=7) {return changed;}
     // 106AD60 accepts only a strictly newer version than the entity controller.
@@ -156,10 +176,29 @@ bool Controller::cohort(Cohort id) noexcept {
     }
     return true;
 }
+bool Controller::stage_cast(coo::Asset a) noexcept {
+    const auto i=scene_index(a);if(i==std::size(kScenes)) {return false;}
+    // Stage actors only. Objects, scene selectors, named-member bindings and
+    // entry inputs remain owned by the authored scene trigger.
+    for(const auto& cast:kScenes[i].cast) {
+        if(cast.type==1 && !request(asset(cast.registry,cast.type,cast.slot),true)) {return false;}
+    }
+    return true;
+}
+bool Controller::spawn_batch(SpawnCheckpoint checkpoint) noexcept {
+    const auto i=static_cast<std::size_t>(checkpoint);
+    if(i>=std::size(kSpawnBatches) || static_cast<unsigned>(kSpawnBatches[i].section)!=frame_.section) {return false;}
+    if(frame_.spawnCheckpoints[i]) {return true;}
+    // The runtime publishes under its controller lock, after the complete batch.
+    // Repeated route samples cannot re-arm a killed source or duplicate a cast.
+    for(const auto cohortId:kSpawnBatches[i].cohorts) {if(!cohort(cohortId)) {return false;}}
+    for(const auto scene:kSpawnBatches[i].casts) {if(!stage_cast(scene)) {return false;}}
+    frame_.spawnCheckpoints.set(i);++frame_.revision;return true;
+}
 bool Controller::source(coo::Generation gen,coo::Asset a,const middleware::bap::activity_message::source_sense::Output& d) noexcept {
     const auto i=spawn_index(a),n=asset_index(a);
     if(gen!=owner() || !frame_.enabled || frame_.fault || frame_.finished
-        || i==kSpawns.size() || n==std::size(kAssets) || kSpawns[i].sceneOwned
+        || i==kSpawns.size() || n==std::size(kAssets)
         || !frame_.native[n].active || frame_.native[n].sourceCleared) {return false;}
     auto& state=frame_.tactics[i];
     // Field 1 echoes the revision of the requested native cost pass.
@@ -212,9 +251,43 @@ bool Controller::use(coo::Generation gen,coo::Asset a,const middleware::bap::act
     const auto& source=frame_.native[n];
     if(!source.managed || !source.prepared || !source.active || d.generation<=0
         || static_cast<std::uint32_t>(d.generation)!=source.generation) {return false;}
+    const auto pickup=pickup_index(a);
+    if(pickup<std::size(kPickups)) {
+        const auto binding=objects_.owner(object_index(a));
+        if(frame_.section!=static_cast<std::uint8_t>(Section::armory) || frame_.weaponUsed || !binding.valid()
+            || binding.owner.value!=source.generation) {return false;}
+        frame_.weapon={binding,static_cast<std::uint8_t>(pickup)};frame_.weaponUsed=true;++frame_.revision;return true;
+    }
     if(!frame_.reviveArmed || frame_.reviveUsed) {return false;}
     // Native 80804FB2 has already checked the interaction and accepted use.
     frame_.reviveUsed=true;++frame_.revision;return true;
+}
+GrantRequest Controller::grant_request() const noexcept {
+    if(!frame_.enabled || frame_.finished || frame_.fault || !frame_.weaponUsed || frame_.weaponGranted
+        || frame_.section!=static_cast<std::uint8_t>(Section::armory)) {return {};}
+    const auto& r=frame_.weapon;
+    return r.valid() && objects_.owner(object_index(r.binding.source))==r.binding?r:GrantRequest{};
+}
+bool Controller::granted(const GrantRequest& r,std::uint64_t instance) noexcept {
+    if(!instance || !r.valid() || grant_request()!=r) {return false;}
+    // The inventory transaction is already committed. This acknowledgement must
+    // not perform another fallible native request. The graph retires the rack.
+    ++frame_.weapon.reward;
+    frame_.weaponGranted=frame_.weapon.reward==std::size(kArmoryRewards);
+    ++frame_.revision;return true;
+}
+bool Controller::scene(coo::Generation gen,coo::Asset a,const middleware::bap::activity_message::scene_sense::Output& d) noexcept {
+    const auto i=scene_index(a);
+    if(gen!=owner() || !frame_.enabled || frame_.finished || i==std::size(kScenes) || !d.delta) {return false;}
+    const auto& native=frame_.native[asset_index(a)];auto& s=frame_.scenes[i];
+    if(!native.active || d.generationWire!=0x80000000U+native.generation
+        || (d.hasSourceRevision && d.sourceRevision>s.revision)) {return false;}
+    // An echoed request revision alone does not prove that its selector exists.
+    // The qualified native playback observer owns started/performance receipts.
+    bool changed=d.completed && !s.completed;
+    s.completed|=d.completed;
+    if(d.hasSourceRevision && d.sourceRevision>s.appliedRevision) {s.appliedRevision=d.sourceRevision;changed=true;}
+    if(changed) {++frame_.revision;}return changed;
 }
 bool Controller::admitted(const EnemyReceipt& r) noexcept {
     const auto a=asset(r.registry,1,r.source);const auto i=spawn_index(a),n=asset_index(a);
@@ -222,6 +295,11 @@ bool Controller::admitted(const EnemyReceipt& r) noexcept {
         || i==kSpawns.size() || n==std::size(kAssets)) {return false;}
     auto& source=frame_.native[n];
     if(!source.active || source.sourceCleared || r.generation!=source.generation) {return false;}
+    // Heroes are not kill-count sources. In particular the authored revival
+    // acquires a new Zavala actor from the same source and generation after
+    // retiring his named member. That is not an encounter overflow.
+    if(a==asset(kPlaza,1,6) || a==asset(kUnderwatch,1,15) || a==asset(kUnderwatch,1,26)
+        || a==asset(kUnderwatch,1,27) || a==asset(kBoulevard,1,17)) {return false;}
     if(source.sourceOwner!=UINT32_MAX && source.sourceOwner!=r.owner) {
         // Backtracking re-streams this authored source under a different salted
         // native owner. Old live actors cannot satisfy the new fight. Retire
@@ -238,6 +316,35 @@ bool Controller::admitted(const EnemyReceipt& r) noexcept {
     if(result==coo::Admission::accepted) {source.sourceOwner=r.owner;}
     if(result==coo::Admission::overflow) {frame_.fault=true;}return result==coo::Admission::accepted;
 }
+PlaybackRequest Controller::playback_request(coo::Asset a) const noexcept {
+    if(!frame_.enabled || frame_.fault || frame_.finished || scene_index(a)==std::size(kScenes)) {return {};}
+    const auto& n=frame_.native[asset_index(a)];
+    return n.active?PlaybackRequest{owner(),a,n.generation,a==kZavalaRevival.scene && frame_.reviveUsed}:PlaybackRequest{};
+}
+bool Controller::playback(const PlaybackReceipt& r,std::uint64_t now) noexcept {
+    const auto i=scene_index(r.request.scene);
+    if(r.request.owner!=owner() || !frame_.enabled || frame_.finished || frame_.fault || i==std::size(kScenes)
+        || r.selector==UINT32_MAX || r.serial==UINT32_MAX || frame_.cinematic.phase!=cinematics::Phase::gameplay) {return false;}
+    const auto& n=frame_.native[asset_index(r.request.scene)];auto& s=frame_.scenes[i];
+    if(!n.active || n.generation!=r.request.generation || r.request.revival!=playback_request(r.request.scene).revival
+        || (s.selector!=UINT32_MAX && (s.selector!=r.selector || s.serial!=r.serial))) {return false;}
+    bool changed=!s.started || (r.performanceFinished && !s.performanceFinished) || (r.entryCue && !s.entryCue)
+        || (r.combatHeld && !s.combatHeld);
+    s.selector=r.selector;s.serial=r.serial;s.started=true;s.performanceFinished|=r.performanceFinished;s.entryCue|=r.entryCue;
+    changed|=(r.combatReleased&~s.combatReleased)!=0 || (r.damageReleased&~s.damageReleased)!=0;
+    s.combatReleased|=r.combatReleased;s.damageReleased|=r.damageReleased;
+    s.combatHeld|=r.combatHeld;
+    for(std::size_t row=0;row<std::size(kDialogue);++row) if(r.speech[row] && !s.speech[row]) {
+        s.speech.set(row);sceneVoiceUntil_=(std::max)(sceneVoiceUntil_,now+kDialogue[row].durationMs+kDialoguePolicy.spacingMs);changed=true;
+    }
+    for(std::size_t c=0;c<kScenes[i].cast.size() && c<16;++c) if(r.combatReleased&(1U<<c)) {
+        const auto ref=kScenes[i].cast[c];const auto a=asset(ref.registry,ref.type,ref.slot);const auto spawn=spawn_index(a);
+        if(spawn==kSpawns.size() || !tactical(kSpawns[spawn]).registry) {continue;}
+        auto& source=frame_.native[asset_index(a)];
+        if(!source.sceneReleased) {source.sceneReleased=true;changed=true;}
+    }
+    if(changed) {++frame_.revision;}return changed;
+}
 bool Controller::died(const EnemyReceipt& r) noexcept {
     const auto a=asset(r.registry,1,r.source);const auto i=spawn_index(a),n=asset_index(a);
     if(!frame_.enabled || frame_.fault || frame_.finished || i==kSpawns.size() || n==std::size(kAssets)) {return false;}
@@ -252,7 +359,7 @@ bool Controller::ghost(coo::Generation gen,coo::Asset a,const middleware::bap::a
         || d.generation!=static_cast<std::int32_t>(frame_.spawnGeneration+1U)
         || !std::isfinite(d.progress) || d.progress<0.F) {return false;}
     // Positive progress, then inactive in the same generation, is the only scan receipt.
-    const bool started=d.active || d.progress>0.F,completed=frame_.consoleStarted && !d.active && d.progress>=1.F;
+    const bool started=d.active && d.progress>0.F,completed=frame_.consoleStarted && !d.active && d.progress>=1.F;
     if((!started || frame_.consoleStarted) && !completed) {return false;}
     frame_.consoleStarted|=started;frame_.consoleScanned=completed;++frame_.revision;return true;
 }
@@ -287,10 +394,12 @@ bool Controller::scene_request(coo::Asset a,std::uint32_t input) noexcept {
     const auto i=scene_index(a);if(i==std::size(kScenes)) {return false;}
     const auto& scene=kScenes[i];auto& state=frame_.scenes[i];
     if(!input) {
+        if(frame_.native[asset_index(a)].active) {return true;}
         // The native Scene owns its actors: request every cast source and object, then the
         // scene itself on a fresh generation with an empty input list.
+        if(!stage_cast(a)) {return false;}
         for(const auto& cast:scene.cast) {
-            if((cast.type==1 || cast.type==4) && !request(asset(cast.registry,cast.type,cast.slot),true)) {return false;}
+            if(cast.type==4 && !request(asset(cast.registry,cast.type,cast.slot),true)) {return false;}
         }
         state={};return request(a,true);
     }
@@ -300,7 +409,7 @@ bool Controller::scene_request(coo::Asset a,std::uint32_t input) noexcept {
     if(!authored) {return false;}
     for(std::size_t n=0;n<state.count;++n) {if(state.events[n]==input) {return true;}}
     if(state.count>=state.events.size()) {return false;}
-    state.events[state.count++]=input;++frame_.revision;return true;
+    state.events[state.count++]=input;++state.revision;++frame_.revision;return true;
 }
 bool Controller::publish(const coo::Command& c) noexcept {
     const auto& g=graph().definition;
@@ -308,10 +417,15 @@ bool Controller::publish(const coo::Command& c) noexcept {
         || c.token!=executor_.token(c.token.step,c.token.command) || c.schema!=g.schema) {return false;}
     requestedAt_[c.token.step][c.token.command]=now_;
     const auto& s=c.spec;
+    // A cinematic handoff wins over later-ready jobs from the same executor pass.
+    // Still allow the pickup command's section transition to the command ship.
+    if(frame_.cinematic.phase!=cinematics::Phase::gameplay
+        && !(s.operation==coo::Operation::mechanic && s.asset==kModule
+            && s.argument==static_cast<std::uint32_t>(Mechanic::finishSection))) {return true;}
     switch(s.operation) {
     case coo::Operation::objective:dialogue_.objective(kDialoguePolicy,s.argument,frame_,frame_.revision);objectives_.set(s.argument,marker(s.argument));return true;
     case coo::Operation::dialogue:dialogue_.enqueue(kDialoguePolicy,static_cast<std::uint8_t>(dialogue_row(s.argument)),now_,dialogue_delay(s.argument),frame_.section,frame_.revision);return true;
-    case coo::Operation::population:return s.asset==kModule && cohort(static_cast<Cohort>(s.argument));
+    case coo::Operation::population:return s.asset==kModule && spawn_batch(static_cast<SpawnCheckpoint>(s.argument));
     case coo::Operation::scene:return scene_request(s.asset,s.argument);
     case coo::Operation::device:
         if(s.asset.type==23) {return request(s.asset,true,std::bit_cast<float>(s.argument));}
@@ -322,6 +436,9 @@ bool Controller::publish(const coo::Command& c) noexcept {
         if(s.asset==kModule) {
             switch(static_cast<Mechanic>(s.argument)) {
             case Mechanic::finishSection:phaseFinished_=true;return true;
+            case Mechanic::assaultRepelled:
+                if(frame_.assaultsRepelled>=3) {return false;}
+                ++frame_.assaultsRepelled;++frame_.revision;return true;
             case Mechanic::restrict:case Mechanic::allow:frame_.restricted=s.argument==static_cast<std::uint32_t>(Mechanic::restrict);++frame_.revision;return true;
             case Mechanic::pickup:
                 if(frame_.section!=static_cast<std::uint8_t>(Section::boulevard) || !cinematics_.begin_pickup(owner(),now_)) {return false;}
@@ -357,6 +474,7 @@ bool Controller::publish(const coo::Command& c) noexcept {
     case coo::Operation::complete:
         if(frame_.section!=static_cast<std::uint8_t>(Section::escape) || !cinematics_.finish_gameplay(owner(),now_)) {return false;}
         frame_.cinematic=cinematics_.state();frame_.restricted=false;objectives_.clear();
+        dialogue_.silence(frame_,frame_.revision);
         if(frame_.native[asset_index(kConsoleLink)].managed) {static_cast<void>(request(kConsoleLink,false));}
         ++frame_.revision;return true;
     default:return false;
@@ -385,10 +503,34 @@ bool Controller::observed(const coo::CommandSpec& s) const noexcept {
         case Milestone::generatorA:return frame_.generatorDown[0];
         case Milestone::generatorB:return frame_.generatorDown[1];
         case Milestone::generatorC:return frame_.generatorDown[2];
+        case Milestone::weaponGranted:return frame_.weaponGranted;
+        case Milestone::turbineFirst:return std::count(frame_.generatorDown.begin(),frame_.generatorDown.end(),true)>=1;
+        case Milestone::turbineSecond:return std::count(frame_.generatorDown.begin(),frame_.generatorDown.end(),true)>=2;
         default:return false;
         }
     }
-    if(s.asset==kDialogueAsset) {return s.argument<std::size(kDialogue) && submitted_[s.argument] && now_>=voiceEnd_[s.argument];}
+    if(s.asset==kDialogueAsset) {
+        const auto row=s.argument&~kDialogueStarted;
+        return row<std::size(kDialogue) && submitted_[row]
+            && ((s.argument&kDialogueStarted)!=0 || now_>=voiceEnd_[row]);
+    }
+    if(s.asset.type==43) {
+        const auto i=scene_index(s.asset);if(i==std::size(kScenes)) {return false;}
+        const auto& scene=frame_.scenes[i];
+        switch(static_cast<SceneEvent>(s.argument)) {
+        case SceneEvent::started:return scene.started;
+        case SceneEvent::completed:return scene.completed;
+        case SceneEvent::inputsApplied:return scene.started && scene.appliedRevision==scene.revision;
+        case SceneEvent::performanceFinished:return scene.performanceFinished;
+        case SceneEvent::entryCue:return scene.entryCue;
+        // These reconstructed cover scenes bind the Cabal as parameter 1;
+        // parameter 0 is the friendly frame, including its scripted death.
+        case SceneEvent::combatOpeningReleased:return (scene.combatReleased&2U)!=0;
+        case SceneEvent::combatDamageReleased:return (scene.damageReleased&2U)!=0;
+        case SceneEvent::combatHeld:return scene.combatHeld;
+        }
+        return false;
+    }
     if(s.asset.type==23) {
         const auto index=asset_index(s.asset);if(index==std::size(kAssets)) {return false;}
         const auto& state=frame_.native[index];
@@ -437,9 +579,21 @@ bool Controller::advance(std::uint64_t run,std::uint64_t now,bool ready) noexcep
     }
     executor_.update(*this);executor_.update(*this);
     if(objectives_.state().active) {objectives_.marker(marker(objectives_.state().event));}
-    dialogue_.advance(kDialoguePolicy,frame_.spawnGeneration-1U,now_,false,frame_,frame_.revision);
+    bool heroSpeech=false;
+    for(const auto& p:kPerformances) {
+        // These child performances contain local dialogue as well as bank
+        // actions. Their natural end also releases queued radio conversations.
+        if(p.scene.registry!=kUnderwatch && p.scene.registry!=kBoulevard) {continue;}
+        const auto& s=frame_.scenes[scene_index(p.scene)];
+        heroSpeech|=frame_.native[asset_index(p.scene)].active && s.count && !s.performanceFinished;
+    }
+    if(frame_.cinematic.phase==cinematics::Phase::gameplay)
+        dialogue_.advance(kDialoguePolicy,frame_.spawnGeneration-1U,now_,heroSpeech || now_<sceneVoiceUntil_,frame_,frame_.revision,true);
     if(phaseFinished_ && executor_.diagnostics().phase!=coo::Phase::failed && std::size_t(frame_.section)+1<mission().phases.size()) {
-        phaseFinished_=false;executor_.cancel(*this);++frame_.section;requestedAt_={};started_=executor_.start(graph().definition,run_);++frame_.revision;
+        const auto bubble=bubble_of(static_cast<Section>(frame_.section));
+        phaseFinished_=false;executor_.cancel(*this);++frame_.section;
+        if(bubble!=bubble_of(static_cast<Section>(frame_.section))) {hasPosition_=false;inside_.reset();}
+        requestedAt_={};started_=executor_.start(graph().definition,run_);++frame_.revision;
     }
     frame_.enabled=!frame_.fault && executor_.diagnostics().phase!=coo::Phase::failed;
     frame_.presentation=objectives_.state();frame_.completion=lifecycle_.publication();return true;

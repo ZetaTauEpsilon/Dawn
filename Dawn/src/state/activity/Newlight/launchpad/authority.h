@@ -124,7 +124,7 @@ template<class W> bool write_body(W& w,const Frame& f,std::uint32_t key,std::uin
     if(a==kDialogueAsset) {return coo::native_presentation::dialogue(w,f.generations,f.activeRow);}
     // The native receiver replaces HUD targets through its three-record ring.
     // Reusing record zero with marker display disabled leaves the old waypoint.
-    if(a==kDirectiveAsset) {return coo::native_presentation::objective(w,f.presentation,{},false,true,
+    if(a==kDirectiveAsset) {return coo::native_presentation::waypoint_objective(w,f.presentation,{},false,
         f.presentation.event==kObjectives[5]?static_cast<std::int32_t>(f.assaultDefeated):-1,kAssaultTarget);}
     if(a==asset(kRoot,11,1)) {
         constexpr std::uint8_t sections[]{0,1,2,7,10};

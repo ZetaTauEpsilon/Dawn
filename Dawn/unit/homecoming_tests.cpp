@@ -1,15 +1,19 @@
 #include "state/activity/vanilla/homecoming/entry.h"
+#include "state/activity/vanilla/homecoming/continuation.h"
 #include "state/activity/vanilla/homecoming/authority.h"
 #include "state/activity/vanilla/homecoming/sense_adapter.h"
 #include "state/activity/vanilla/homecoming/transit_rules.h"
 #include "state/activity/vanilla/homecoming/entrance_native.h"
 #include "state/activity/vanilla/homecoming/door_native.h"
+#include "state/activity/vanilla/homecoming/ship_barrier.h"
 #include "state/activity/vanilla/homecoming/console_scan.h"
 #include "state/activity/vanilla/homecoming/registries.h"
 #include "state/activity/vanilla/homecoming/prologue.h"
 #include "state/activity/vanilla/homecoming/music.h"
 #include "server/bap/encrypted/push/activity/vanilla/homecoming_roster.h"
 #include "client/activity/campaign_openings.h"
+#include "client/hooks/bootflow/gate_trace_cache.h"
+#include "client/hooks/bootflow/opening_fade_scope.h"
 #include "middleware/encoding/bit_writer.h"
 #include "middleware/encoding/bit_reader.h"
 #include <algorithm>
@@ -18,6 +22,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <memory>
+#include <cstring>
 
 namespace m=dawn::state::activity::vanilla::homecoming;
 namespace coo=dawn::state::activity::coo;
@@ -26,6 +31,7 @@ static unsigned checks{};
 static void check(bool ok,const char* why) {
     ++checks;if(!ok) {std::fprintf(stderr,"FAIL: %s\n",why);std::exit(1);}
 }
+#include "homecoming_fade_scope_tests.inl"
 static void wire(const m::Frame& frame) {
     std::array<std::byte,16384> storage{};
     for(const auto& asset:m::kAssets) {
@@ -64,6 +70,7 @@ static void catalog() {
         check(m::spawn_index(m::asset(p.registry,1,p.source))==i,"spawn rows index by source asset");
         check(p.categories>=1 && p.categories<=4,"declared native categories");
         check(m::expected(p)<=63,"expected admissions fit the native request width");
+        check(m::expected(p)<=16,"expected admissions also fit the bounded actor ledger");
     }
     for(const auto& cohort:m::kCohorts) {
         for(const auto member:cohort.members) {
@@ -82,6 +89,17 @@ static void catalog() {
 }
 static void graphs() {
     check(m::mission().valid(),"all nine section graphs are valid");
+    const auto& military=m::mission().phases[static_cast<unsigned>(m::Section::military)].definition;
+    std::uint32_t sightingDependencies{},sightingRequired{};
+    for(std::size_t i=0;i<military.steps.size();++i) {
+        const auto& step=military.steps[i];
+        if(step.name=="command ship sighting") sightingDependencies=step.dependencies;
+        if(step.name=="destroyer present" || step.name=="hangar window") sightingRequired|=1U<<i;
+    }
+    check(std::popcount(sightingRequired)==2 && (sightingDependencies&sightingRequired)==sightingRequired,
+        "ship sighting joins the route sightline with actual ship presence, without a timer");
+    check(m::kDialogue[72].sceneOwned,"Ikora performer exclusively owns the full Ghost/Zavala pickup exchange");
+    std::array<unsigned,94> requests{};std::array<unsigned,2> wards{};
     for(std::size_t s=0;s<m::mission().phases.size();++s) {
         const auto& g=m::mission().phases[s].definition;
         check(!g.steps.empty() && g.steps.size()<=coo::Executor::kMaxSteps,"section graph fits the executor");
@@ -91,8 +109,26 @@ static void graphs() {
                 if(c.operation==coo::Operation::dialogue) {
                     const auto row=m::dialogue_row(c.argument);
                     check(row<std::size(m::kDialogue) && !m::kDialogue[row].sceneOwned && m::kDialogue[row].durationMs,"dialogue commands name authored, natively timed cues");
+                    ++requests[row];
+                    if(s==static_cast<unsigned>(m::Section::plaza) || s==static_cast<unsigned>(m::Section::plazaWaves)) {
+                        check(m::dialogue_delay(c.argument)==0,"plaza cues have no fixed pre-play delay");
+                    }
+                    if(row==37) check(step.name=="to the plaza","Red Legion conversation starts in the exit corridor, not at the ship reveal");
+                    if(row==82) check(step.name=="stair impacts","Cayde status radio follows the actual stairwell milestone");
+                    if(row==6) check(step.name=="Cabal purpose","opening explanation follows first-contact clearance");
                 }
-                if(c.operation==coo::Operation::population) {check(c.asset==m::kModule && c.argument<std::size(m::kCohorts),"population commands request cohorts");}
+                if(s==static_cast<unsigned>(m::Section::plaza) || s==static_cast<unsigned>(m::Section::plazaWaves)) {
+                    check(c.operation!=coo::Operation::eventAfter,"plaza does not add intermission padding to native scene/clearance waits");
+                    if(c.operation==coo::Operation::device && c.asset==m::asset(m::kPlaza,4,18))
+                        check(c.argument==0,"plaza only clears the standalone Ward; the native performer owns casting effects");
+                    if(c.operation==coo::Operation::scene && c.asset==m::asset(m::kPlaza,43,4) && c.argument==0) {
+                        ++wards[s-static_cast<unsigned>(m::Section::plaza)];
+                    }
+                    if(s==static_cast<unsigned>(m::Section::plaza) && c.asset==m::kDialogueAsset
+                        && coo::is_observation(c.operation)) {check(c.argument!=51,"first assault cannot wait on the second assault's radio line");}
+                }
+                if(c.operation==coo::Operation::population) {check(c.asset==m::kModule && c.argument<std::size(m::kSpawnBatches)
+                    && static_cast<std::size_t>(m::kSpawnBatches[c.argument].section)==s,"population commands request a checkpoint batch in its own section");}
                 if(c.operation==coo::Operation::objective) {
                     bool known=false;for(const auto o:m::kObjectives) {known|=o==c.argument;}
                     check(known,"objective commands use authored directive events");
@@ -101,6 +137,9 @@ static void graphs() {
             }
         }
     }
+    check(requests[72]==0 && requests[53]==1 && requests[57]==1 && wards[0]==1 && wards[1]==1,
+        "one owner for pickup exchange and one distinct shield warning per inter-wave barrage");
+    check(requests[60]==0 && requests[61]==0,"delay-leaving reminders do not play when the player actually leaves");
     unsigned finishes{};
     for(std::size_t s=0;s+1<m::mission().phases.size();++s) {
         for(const auto& step:m::mission().phases[s].definition.steps) for(const auto& c:step.commands) {
@@ -203,6 +242,41 @@ static void dialogue_rows() {
     service.advance(m::kDialoguePolicy,5,3,false,presentation,revision);
     check(presentation.activeRow==coo::kNoDialogue,"a duplicate request does not replay the row");
 }
+static void scene_source_and_counter_wire() {
+    auto f=std::make_unique<m::Frame>();f->enabled=true;f->spawnGeneration=1;
+    std::array<std::byte,2048> storage{};
+    for(const auto& p:m::kSpawns) if(p.sceneOwned) for(unsigned phase=0;phase<8;++phase) {
+        const auto a=m::asset(p.registry,1,p.source);auto& n=f->native[m::asset_index(a)];
+        n.managed=true;n.active=(phase&1)!=0;n.sceneReleased=(phase&2)!=0;n.sourceCleared=(phase&4)!=0;n.generation=1;
+        dawn::middleware::encoding::bits::Writer writer(storage);
+        check(m::write_body(writer,*f,a.registry,1,a.slot),"scene source authority encodes");
+        dawn::middleware::encoding::bits::Reader reader{std::span<const std::byte>(storage)};
+        std::uint64_t mode{};check(reader.skip(writer.bit_count()-36) && reader.read(3,mode),"read exact final source-placement mode");
+        check(mode==2,"scene ownership survives staging, entry, flag removal and death without creating an ordinary actor");
+        dawn::middleware::encoding::bits::Reader countsReader{std::span<const std::byte>(storage)};
+        std::uint64_t categories{},count{};
+        check(countsReader.skip(m::tactical(p).registry?59:4) && countsReader.read(4,categories)
+            && categories==p.categories,"scene request retains its authored category count");
+        const auto expected=n.active && !n.sourceCleared?m::requests(p):std::array<std::uint8_t,4>{};
+        for(unsigned i=0;i<p.categories;++i) {
+            check(countsReader.read(32,count) && count==0x80000000ULL+expected[i],"dormant or killed scene cast never requests replacement population");
+        }
+    }
+    f->presentation.published=f->presentation.active=true;
+    for(const auto event:{m::kObjectives[7],m::kObjectives[11]}) for(unsigned count=0;count<=3;++count) {
+        f->presentation.event=event;f->assaultsRepelled=static_cast<std::uint8_t>(count);
+        for(unsigned i=0;i<3;++i) f->generatorDown[i]=i<count;
+        dawn::middleware::encoding::bits::Writer writer(storage);
+        check(m::write_body(writer,*f,m::kDirectiveAsset.registry,static_cast<std::uint8_t>(m::kDirectiveAsset.type),m::kDirectiveAsset.slot),"counted objective encodes");
+        dawn::middleware::encoding::bits::Reader reader{std::span<const std::byte>(storage)};std::uint64_t current{},target{};
+        dawn::middleware::encoding::bits::Reader variantReader{std::span<const std::byte>(storage)};std::uint64_t variant{};
+        check(variantReader.skip(142) && variantReader.read(32,variant)
+            && variant==0x80000000ULL+(event==m::kObjectives[11]?1U:0U),
+            "turbines select authored counted variant 1; assaults retain counted variant 0");
+        check(reader.skip(529) && reader.read(32,current) && reader.read(32,target),"read directive current and target fields");
+        check(current==0x80000000ULL+count && target==0x80000003ULL,"assault and turbine HUD counters encode N of 3");
+    }
+}
 static void entrance() {
     namespace en=m::entrance_native;
     struct World {
@@ -227,8 +301,52 @@ static void entrance() {
     result=en::repair(world,ship,[&] {return m::EntranceRequest{};});
     check(result.doors==0,"a changed request cancels the grant");
     check(!en::repair(world,{},[&] {return ship;}).doors,"an idle request grants nothing");
-    const m::door_native::Row bazaar{0,5,5,0x80B505B2U,15,0x7B8AC80734FA725FULL},gate{0,1,5,0x80F10442U,1,0x125D2DA09F611701ULL};
-    check(m::door_native::placement(bazaar) && !m::door_native::placement(gate),"the bazaar door placement is exact");
+    en::SweepGate gate;
+    const m::EntranceRequest opening{owner,1,static_cast<std::uint8_t>(m::Section::underwatch)};
+    check(!gate.due(opening,0x10000,0) && !en::repair(world,opening,[&] {return opening;}).rows,
+        "opening sections with no entrance placements do not scan");
+    unsigned scans{};
+    for(std::uint64_t ms=0;ms<2000;++ms) {
+        // Many devices per frame cannot multiply full-table scans.
+        for(unsigned callback=0;callback<64;++callback) scans+=gate.due(ship,0x10000,ms)?1U:0U;
+    }
+    check(scans==4,"128000 unchanged device callbacks trigger only four fallback scans in two seconds");
+    check(gate.due(ship,0x20000,1999),"a replacement entity table triggers fresh discovery immediately");
+    check(gate.due(military,0x20000,1999),"a section transition triggers fresh discovery");
+    auto replay=military;++replay.generation;
+    check(gate.due(replay,0x20000,1999),"checkpoint generation changes invalidate the sweep schedule");
+    ++replay.owner.run;
+    check(gate.due(replay,0x20000,1999),"new runs do not inherit the old scan cooldown");
+    check(gate.due(replay,0x20000,10),"clock rollback cannot indefinitely suppress fallback discovery");
+    check(!gate.due({},0x20000,11) && gate.due(replay,0x20000,12),"inactive missions clear sweep state");
+    world.local[2]=false;
+    result=en::repair_callback(world,ship,2,[&] {return ship;});
+    check(result.doors==1 && result.rows==1 && world.local[2],"a newly ticking door is repaired immediately without a sweep");
+    check(!en::repair_callback(world,ship,2,[&] {return ship;}).doors,"already owned callbacks are idempotent");
+    world.local[2]=false;
+    check(!en::repair_callback(world,ship,0x2002,[&] {return ship;}).doors,"recycled callback handles cannot grant a replacement door");
+    check(!en::repair_callback(world,ship,2,[&] {return military;}).doors,"changed request blocks a callback grant");
+    check(!en::repair_callback(world,ship,5,[&] {return ship;}).doors,"unrelated doors are not granted by the fast path");
+    struct RecycledWorld : World {
+        unsigned reads{};
+        bool row(std::size_t slot,en::Row& out) noexcept {
+            if(!World::row(slot,out)) return false;
+            if(++reads==2) out.entity+=0x2000;
+            return true;
+        }
+    } recycled;
+    recycled.rows=world.rows;
+    check(!en::repair_callback(recycled,ship,2,[&] {return ship;}).doors && recycled.grants==0,
+        "identity is rechecked immediately before a callback grant");
+    struct UnstableWorld : World {bool stable() const noexcept {return false;}} unstable;
+    unstable.rows=world.rows;
+    check(!en::repair_callback(unstable,ship,2,[&] {return ship;}).doors,
+        "a changing entity table blocks callback mutation");
+    // A streaming door without a device tick is still found by fallback repair.
+    result=en::repair(world,ship,[&] {return ship;});
+    check(result.doors==1 && world.local[2],"fallback discovery retains repair of doors not yet receiving callbacks");
+    const m::door_native::Row bazaar{0,5,5,0x80B505B2U,15,0x7B8AC80734FA725FULL},militaryGate{0,1,5,0x80F10442U,1,0x125D2DA09F611701ULL};
+    check(m::door_native::placement(bazaar) && !m::door_native::placement(militaryGate),"the bazaar door placement is exact");
 }
 static void receipts(m::Controller& controller) {
     const auto owner=controller.owner();
@@ -239,6 +357,9 @@ static void receipts(m::Controller& controller) {
     check(!controller.ghost(owner,m::kConsoleLink,{true,0.5F,static_cast<std::int32_t>(controller.frame().spawnGeneration+1U)}),"ghost progress is ignored while the console is not armed");
     check(!controller.use(owner,m::kReviveInteract,{}),"revive use requires an armed prompt");
 }
+#include "homecoming_progression_tests.inl"
+#include "homecoming_ship_barrier_tests.inl"
+#include "homecoming_performance_tests.inl"
 int main() {
     namespace openings=dawn::client::activity::mission_launch::openings;
     unsigned homecoming{};
@@ -247,7 +368,21 @@ int main() {
             && !mission.destination.hasSpawnSetHash,"Homecoming launch is pinned to its installed identity and authored Underwatch arrival");
     }
     check(homecoming==1,"Red War lists Homecoming once");
-    catalog();graphs();
+    check(std::string_view(openings::kMissions[12].title)=="Exodus" && openings::mission_number(12)==2
+        && openings::kMissions[12].activity==288 && openings::kMissions[12].investmentHash==0xB913ED3FU,
+        "Exodus is mission 2 without changing the Adieu launch route");
+    check(std::string_view(openings::kMissions[11].title)=="1AU" && openings::mission_number(11)==16
+        && openings::kMissions[11].activity==281,"1AU remains its existing route but displays mission 16");
+    check(openings::kDisplayOrder[0]==0 && openings::kDisplayOrder[1]==12 && openings::kDisplayOrder[2]==11,
+        "launcher presents Homecoming, Exodus, then 1AU in campaign order");
+    std::array<bool,openings::kMissions.size()> seen{};
+    for(const auto index:openings::kDisplayOrder) {
+        check(index<seen.size() && !seen[index],"display order contains every launch route exactly once");seen[index]=true;
+        if(openings::kMissions[index].campaign==1) check(openings::mission_number(index)==index,"Osiris numbering unchanged");
+        if(openings::kMissions[index].campaign==2) check(openings::mission_number(index)==index-8,"strike numbering unchanged");
+    }
+    check(openings::mission_number(openings::kMissions.size())==0,"invalid launcher index has no label");
+    catalog();graphs();ship_barriers();performance_regressions();
     std::string error;
     auto document=coo::script::MissionDocument::read(std::filesystem::path(__FILE__).parent_path().parent_path()/"scripts/homecoming.lua",m::kEntryProfile,error);
     if(!document) std::fprintf(stderr,"Lua: %s\n",error.c_str());
@@ -270,9 +405,50 @@ int main() {
         check(false,"Lua composition advances gameplay");
     }
     check(!controller->frame().fault,"crash-site graph has no rejected commands");
+    check(controller->frame().activeRow==1,"Ghost's first line is offered on the first gameplay update, with no seven-second delay");
+    check(controller->frame().spawnCheckpoints.count()==1 && controller->frame().spawnCheckpoints[0],"only the hallway batch starts on landing");
+    for(const auto slot:{6,8,9,20,22,23,28,30,32}) {
+        check(!controller->frame().native[m::asset_index(m::asset(m::kUnderwatch,1,static_cast<std::uint16_t>(slot)))].active,
+            "later hallway Cabal wait for their individual route triggers");
+    }
+    for(const auto slot:{10,18,17,64,14}) {
+        check(!controller->frame().native[m::asset_index(m::asset(m::kUnderwatch,43,static_cast<std::uint16_t>(slot)))].active,
+            "checkpoint cast preparation does not play hero scenes ahead of their triggers");
+    }
+    check(!controller->frame().native[m::asset_index(m::asset(m::kUnderwatch,1,39))].managed,
+        "live-identified Shaxx doorway civilian is excluded from landing population");
+    check(!controller->frame().native[m::asset_index(m::asset(m::kUnderwatch,1,15))].managed,
+        "Shaxx is not spawned at landing");
+    for(const auto member:m::kUnderwatchCast) {
+        check(controller->frame().native[m::asset_index(m::asset(member.registry,1,member.slot))].active,"ambient crash-site cast remains present on landing");
+    }
+    // Cross only the first-contact trigger; later reinforcement batches stay dormant.
+    for(const auto& v:m::kVolumes) if(v.asset==m::trigger_area(m::kUnderwatch,"pt_wall_explode")) {
+        m::Point p{};for(const auto& q:v.vertices) {p.x+=q.x;p.y+=q.y;}
+        p.x/=static_cast<float>(v.vertices.size());p.y/=static_cast<float>(v.vertices.size());p.z=(v.min.z+v.max.z)*.5F;
+        controller->position(1,p);
+    }
+    check(controller->advance(1,51,true),"first contact trigger requests its local batch");
+    check(controller->frame().spawnCheckpoints[static_cast<unsigned>(m::SpawnCheckpoint::firstContact)]
+        && !controller->frame().spawnCheckpoints[static_cast<unsigned>(m::SpawnCheckpoint::centurionRush)]
+        && !controller->frame().spawnCheckpoints[static_cast<unsigned>(m::SpawnCheckpoint::dropPod)],"opening checkpoints remain independent");
+    const auto hallwayGeneration=controller->frame().native[m::asset_index(m::asset(m::kUnderwatch,1,8))].generation;
+    const auto hallwayRevision=controller->frame().revision;
+    for(unsigned repeat=0;repeat<20;++repeat) {check(controller->advance(1,51+repeat,true),"standing at a checkpoint is safe");}
+    check(controller->frame().native[m::asset_index(m::asset(m::kUnderwatch,1,8))].generation==hallwayGeneration
+        && controller->frame().revision==hallwayRevision,"repeated checkpoint updates do not request a second batch or re-arm actors");
+    const auto backup=m::asset(m::kUnderwatch,1,8);
+    for(unsigned i=0;i<m::expected(m::kSpawns[m::spawn_index(backup)]);++i) {
+        const m::EnemyReceipt enemy{1,1000+i,2000,hallwayGeneration,8,m::kUnderwatch};
+        check(controller->admitted(enemy) && controller->died(enemy),"triggered hallway Cabal can be cleared before the next route trigger");
+    }
+    check(controller->frame().native[m::asset_index(backup)].sourceCleared,"early hallway deaths remain terminal");
+    for(unsigned repeat=0;repeat<10;++repeat) {static_cast<void>(controller->advance(1,80+repeat,true));}
+    check(controller->frame().native[m::asset_index(backup)].sourceCleared
+        && controller->frame().native[m::asset_index(backup)].generation==hallwayGeneration,"waiting at a checkpoint cannot resurrect a cleared batch member");
     check(controller->frame().section==static_cast<std::uint8_t>(m::Section::underwatch) && controller->frame().bubble==9,"gameplay starts in the Underwatch");
     check(controller->frame().presentation.published && controller->frame().presentation.event==m::kObjectives[0],"the first directive is published on arrival");
-    check(controller->frame().musicSection==m::music_section::underwatchRuins && m::music::section(controller->frame())==m::music_section::underwatchRuins,"the Underwatch score starts on landing");
+    check(controller->frame().musicSection==m::music_section::firstCabal && m::music::section(controller->frame())==m::music_section::firstCabal,"the first-contact trigger advances the score");
     wire(controller->frame());
     receipts(*controller);
     auto frame=std::make_unique<m::Frame>(controller->frame());
@@ -287,9 +463,10 @@ int main() {
     frame->section=static_cast<std::uint8_t>(m::Section::ship);
     check(m::console_scan_request(owner,*frame).generation==frame->spawnGeneration+1U,"the console scan request carries the Ghost link generation");
     controller->reset();check(!controller->frame().enabled && !controller->owner().valid(),"reset retires mission authority");
+    check(controller->frame().spawnCheckpoints.none(),"reset clears all encounter checkpoint latches");
     check(controller->select(1,100) && controller->owner()!=owner,"replayed run gets a fresh authority generation");
     check(!controller->arrival(owner,1,110),"retired run receipts cannot activate new attempt");
-    cinematics();dialogue_rows();entrance();prologue_chain();
+    cinematics();dialogue_rows();centurion_spawn_regression();civilian_door_run_regression();scene_source_and_counter_wire();entrance();prologue_chain();progression();opening_fade_test::run();
     std::printf("PASS: %u Homecoming launch identity, catalog, section graph, Lua entry, authority width, cinematic, dialogue, entrance and receipt checks\n",checks);
     return 0;
 }

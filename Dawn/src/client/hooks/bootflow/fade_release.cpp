@@ -12,7 +12,9 @@
 #include "../../../state/activity/vanilla/one_au/runtime.h"
 #include "../../../state/activity/vanilla/homecoming/runtime.h"
 #include "../../../state/activity/runtime.h"
+#include "../../../state/activity/destination/activity_destination_snapshot.h"
 #include "internal.h"
+#include "opening_fade_scope.h"
 
 namespace dawn::client::hooks::bootflow {
 namespace {
@@ -71,6 +73,24 @@ std::atomic<AcquireChannel> g_acquire{nullptr};
 std::atomic_bool g_openingHeld{false};
 std::atomic_bool g_logged{false};
 
+opening_fade_scope::Owner opening_owner() noexcept {
+    namespace activity=state::activity;
+    const auto run=activity::mission_run_generation();
+    const auto joined=activity::newest_joined_activity();
+    activity::destination::DestinationSelection selection{};
+    // Do not require mission_seed_armed here: native C9 arrival can precede it.
+    // A roster prepared for an old destination is not the joined world owner.
+    if(!run || !joined || !activity::destination::snapshot(joined,selection)
+        || activity::mission_run_generation()!=run || activity::newest_joined_activity()!=joined)
+        return opening_fade_scope::Owner::none;
+    return opening_fade_scope::owner(selection);
+}
+constexpr std::array<opening_fade_scope::Source,3> kOpeningSources{{
+    {state::activity::newlight::launchpad::observe_fly_in_complete,state::activity::newlight::launchpad::opening_mask},
+    {state::activity::vanilla::one_au::observe_fly_in_complete,state::activity::vanilla::one_au::opening_mask},
+    {state::activity::vanilla::homecoming::observe_fly_in_complete,state::activity::vanilla::homecoming::opening_mask},
+}};
+
 } // namespace
 
 /** Re-arms the one line the release logs, so the next load reports its own. */
@@ -80,18 +100,10 @@ void rearm_fade_release() noexcept {
 
 /** Releases the world-transition fade channel. The spawn gate decides when. */
 void release_world_fade(bool flyInComplete) noexcept {
-    // Only the admitted native arrival boundary can arm the mission’s opening mask.
-    if (flyInComplete) {
-        state::activity::newlight::launchpad::observe_fly_in_complete();
-        state::activity::vanilla::one_au::observe_fly_in_complete();
-        state::activity::vanilla::homecoming::observe_fly_in_complete();
-    }
+    const bool opening=opening_fade_scope::wanted(opening_owner(),kOpeningSources,GetTickCount64(),flyInComplete);
     // The loading mask is visual only; the native spawn gate may finish while
     // the movie prepares. Its usual fade release must not expose that camera.
-    if (g_acquire.load(std::memory_order_acquire)
-        && (state::activity::newlight::launchpad::opening_mask(GetTickCount64())
-            || state::activity::vanilla::one_au::opening_mask(GetTickCount64())
-            || state::activity::vanilla::homecoming::opening_mask(GetTickCount64()))) { poll_opening_fade(); return; }
+    if (g_acquire.load(std::memory_order_acquire) && opening) { poll_opening_fade(); return; }
     const ReleaseChannel release = g_release.load(std::memory_order_acquire);
     if (release == nullptr || g_manager == nullptr || !core::settings::get().client.fadeRelease) {
         return;
@@ -119,10 +131,9 @@ void poll_opening_fade() noexcept {
     const auto acquire=g_acquire.load(std::memory_order_acquire);
     const auto release=g_release.load(std::memory_order_acquire);
     if (!acquire || !release || !g_manager) { return; }
+    const auto owner=opening_owner();
     const bool wanted=core::settings::get().client.fadeRelease
-        && (state::activity::newlight::launchpad::opening_mask(GetTickCount64())
-            || state::activity::vanilla::one_au::opening_mask(GetTickCount64())
-            || state::activity::vanilla::homecoming::opening_mask(GetTickCount64()));
+        && opening_fade_scope::wanted(owner,kOpeningSources,GetTickCount64());
     std::uint32_t channel=kWorldTransitionChannel;
     auto colour=kOpaqueBlack;
     if (wanted) {
@@ -132,15 +143,17 @@ void poll_opening_fade() noexcept {
         // for the initial arrival and while the opening's camera is installed.
         acquire(g_manager,&channel,colour.data(),0.F);
         if (!g_openingHeld.exchange(true,std::memory_order_relaxed)) {
-            core::log::write(core::log::Channel::client,core::log::Level::info,
-                "ev=launchpad stage=opening_mask active=1 source=fly_in_complete");
+            std::array<char,128> line{};
+            std::snprintf(line.data(),line.size(),"ev=bootflow stage=opening_mask active=1 source=fly_in_complete owner=%u",
+                static_cast<unsigned>(owner));
+            core::log::write(core::log::Channel::client,core::log::Level::info,line.data());
         }
     } else if (g_openingHeld.exchange(false,std::memory_order_relaxed)) {
         // Release on genuine playback, timeout, reset, or mission change. This
         // cleanup also runs after spawning has stopped calling its native gate.
         (void)release(g_manager,&channel,colour.data(),kFadeInSeconds);
         core::log::write(core::log::Channel::client,core::log::Level::info,
-            "ev=launchpad stage=opening_mask active=0");
+            "ev=bootflow stage=opening_mask active=0");
     }
 }
 

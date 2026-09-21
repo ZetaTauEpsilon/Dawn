@@ -2,6 +2,7 @@
 #include "../../../../../state/activity/vanilla/one_au/transit.h"
 #include "../../../../../state/activity/vanilla/one_au/runtime.h"
 #include "../../../../../state/activity/vanilla/homecoming/transit.h"
+#include "../../../../../state/activity/vanilla/adieu/transit.h"
 #include "../../../../../state/activity/vanilla/homecoming/runtime.h"
 #include "../../../../../state/activity/vanilla/homecoming/prologue.h"
 #include "activity_keepalive_push.h"
@@ -291,6 +292,8 @@ bool consume_activity_keepalive(Session& session,
                 session.activity.instance, now)
             || state::activity::vanilla::one_au::transit::membership_due(session.activity.instance,
                 state::activity::mission_run_generation(),now)
+            || state::activity::vanilla::adieu::transit::membership_due(session.activity.instance,
+                state::activity::mission_run_generation(),now)
             || state::activity::vanilla::homecoming::transit::membership_due(session.activity.instance,
                 state::activity::mission_run_generation(),now));
     const bool keepaliveDue = now >= session.activity.keepaliveDueTick
@@ -299,6 +302,7 @@ bool consume_activity_keepalive(Session& session,
             && (state::activity::omega_presentation::publication_due(now)
                 || state::activity::omega_first_lair::publication_due(now)
                 || state::activity::vanilla::one_au::publication_due(now)
+                || state::activity::vanilla::adieu::publication_due(now)
                 || state::activity::vanilla::homecoming::publication_due(now)
                 || state::activity::gateway::publication_due(now)
                 || state::activity::deadly_trial::publication_due(now)

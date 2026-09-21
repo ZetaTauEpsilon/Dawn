@@ -18,18 +18,22 @@ inline constexpr coo::native_combatant::TacticalGroup kBossTactics[]{
 };
 // Route markers bind the recovered native point sources; no invented coordinates.
 inline constexpr coo::Asset kObjectiveTargets[]{
-    {0xF5737F85U,0x80B42335U,31,2}, // Tangle approach
-    {0xD8FA09CAU,0x80B4224DU,31,0}, // Mists cave
-    {0x2D20FD66U,0x80B42246U,31,1}, // Pursuit route
+    {0xF5737F85U,0x80B4270DU,47,6}, // Tangle approach
+    {0xD8FA09CAU,0x80B4245EU,47,8}, // Mists cave
+    {0x2D20FD66U,0x80B42423U,47,13}, // Pursuit route
     {0x153E22CDU,0x80B421FAU,1,21}, // Entangled Mind
-    {0x3C7C8AE9U,0x80B4223DU,31,0}, // Cave exit
-    {0x701F9CE5U,0x80B42356U,31,2}, // Well of Echoes approach
-    {0xA12CA9FAU,0x80B42408U,31,1}, // Materializing platforms
+    {0x3C7C8AE9U,0x80B423F4U,47,1}, // Cave exit
+    {0x701F9CE5U,0x80B42763U,47,13}, // Well of Echoes approach
+    {0xA12CA9FAU,0x80B42A7FU,47,5}, // Materializing platforms
     kScans[0].source,
 };
 inline constexpr coo::MarkerTarget marker(std::uint32_t event) noexcept {
     for(std::size_t i=0;i<std::size(kObjectives);++i) {
-        if(event==kObjectives[i].event) {return {kObjectiveTargets[i],{}};}
+        if(event==kObjectives[i].event) {
+            constexpr std::uint32_t areas[]{0x37A08717,0x849E9C59,0x849E9C59,0x849E9C59,0x849E9C59,0x37A08717,0x29C88401,0x29C88401};
+            const auto a=kObjectiveTargets[i];
+            return {a,a.type==47?std::array<std::uint32_t,4>{0xF995E43A,areas[i],a.registry,0x1811EF12}:std::array<std::uint32_t,4>{}};
+        }
     }
     return {};
 }

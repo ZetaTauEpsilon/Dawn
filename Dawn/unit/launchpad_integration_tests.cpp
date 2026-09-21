@@ -78,8 +78,8 @@ void verify_objective_delivery(const std::filesystem::path& output) {
     constexpr unsigned selectors[]{0,0,1,2,0,2};
     for(unsigned stage=0;stage<std::size(rows);++stage) {
         const auto row=rows[stage];
-        const auto key=row==4?lp::kBreachRoute:lp::kDivideRoute;
-        const std::uint16_t slot=row==4?22:row==5?8:7;
+        const auto key=row==4?lp::kBreachRoute:row==7?lp::kHangarRoute:lp::kDivideRoute;
+        const std::uint16_t slot=row==4?22:row==5 || row==7?8:7;
         coo::Asset marker{};
         for(const auto& n:lp::kNavigation) {if(n.asset.registry==key && n.asset.slot==slot) {marker=n.asset;}}
         CHECK(marker.registry==key);
@@ -104,14 +104,14 @@ void verify_objective_delivery(const std::filesystem::path& output) {
                 CHECK(read(32)==expected);
             }
             CHECK(read(2)==1);CHECK(reader.skip(55));
-            CHECK(read(3)==(active?3U:1U)); // Decoded display mode 2 enables the marker.
+            CHECK(read(3)==1U); // Released route selector; not the previous display-mode override.
             for(unsigned target=0;target<4;++target) {
                 const bool selected=active && target==0;
                 CHECK(read(32)==(selected?key:0x811C9DC5U));
                 CHECK(read(7)==(selected?48U:0U));
                 CHECK(read(16)==(selected?32768U+slot:32767U));
                 CHECK(reader.skip(55));
-                for(unsigned word=0;word<4;++word) {CHECK(read(32)==(selected && word==0?0x811C9DC5U:0U));}
+                for(unsigned word=0;word<4;++word) {CHECK(read(32)==0x811C9DC5U);}
                 CHECK(read(1)==0);
             }
         }

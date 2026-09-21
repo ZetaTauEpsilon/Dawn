@@ -16,6 +16,7 @@
 #include "../../../state/activity/coo/lost_sector_group_catalog.h"
 #include "../../../state/activity/coo/edz_moon_lost_sector_group_catalog.h"
 #include "../../../state/activity/vanilla/homecoming/registries.h"
+#include "../../../state/activity/vanilla/adieu/registries.h"
 #include "internal.h"
 #include "campaign_shared_groups.h"
 
@@ -376,7 +377,9 @@ bool resolve_object(const reader::Source& source,
         || state::activity::coo::open_world::required(
             context.scenarioTag,objectTag,memo.registryKey,memo.explicitSliceMask)
         || state::activity::vanilla::homecoming::registries::required(
-            context.scenarioTag,objectTag,memo.registryKey,memo.explicitSliceMask)
+              context.scenarioTag,objectTag,memo.registryKey,memo.explicitSliceMask)
+        || state::activity::vanilla::adieu::registries::required(
+              context.scenarioTag,objectTag,memo.registryKey,memo.explicitSliceMask)
         || state::activity::vendors::required(
             context.scenarioTag,objectTag,memo.registryKey,memo.explicitSliceMask)
         || state::activity::coo::lost_sector::required(

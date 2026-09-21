@@ -171,7 +171,7 @@ int main() {
             && mission.destination.bubble==8 && mission.destination.sliceSet==64
             && mission.destination.spawnSetHash==0x2EA8FB98U,"1AU launch is pinned to its installed identity and opening");
     }
-    check(redWar==2 && oneAu==1,"Red War exposes Homecoming and 1AU");
+    check(redWar==3 && oneAu==1,"Red War exposes Homecoming, Exodus and 1AU");
     check(m::mission().valid(),"all mission graphs and checkpoint graphs are valid");
     std::string error;
     auto document=coo::script::MissionDocument::read(std::filesystem::path(__FILE__).parent_path().parent_path()/"scripts/one_au.lua",m::kEntryProfile,error);

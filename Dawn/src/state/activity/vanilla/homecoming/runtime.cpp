@@ -3,8 +3,10 @@
 #include "console_scan.h"
 #include "entrance_native.h"
 #include "door_native.h"
+#include "ship_barrier.h"
 #include "prologue.h"
 #include "entry.h"
+#include "continuation.h"
 #include "../../runtime.h"
 #include "../../../../core/logging/log.h"
 #include "../../../../client/hooks/bootflow/gateway_native_read.h"
@@ -16,6 +18,7 @@ namespace {
 std::mutex mutex;Controller controller;Entry entry;
 std::unique_ptr<coo::script::MissionDocument> document;std::uint64_t selectedRun{},nextPublication{};
 coo::StallDiagnostics stalls;std::uint32_t lastActive{UINT32_MAX},lastComplete{UINT32_MAX};std::uint8_t lastSection{UINT8_MAX};bool lastFault{};
+std::bitset<std::size(kSpawnBatches)> loggedSpawnCheckpoints{};
 bool current() noexcept {return selectedRun && selectedRun==mission_run_generation() && mission_seed_armed() && world_phase()==WorldPhase::arrived;}
 void log(std::string_view text) noexcept {core::log::write(core::log::Channel::server,core::log::Level::info,text);}
 bool load() noexcept {
@@ -54,9 +57,14 @@ void poll_readiness(std::uint64_t run,std::uint64_t now) noexcept {
 }
 bool prepare(std::uint64_t run,bool selected) noexcept {
     const std::lock_guard lock(mutex);if(run!=mission_run_generation()) {return false;}
-    if(!selected) {entry.reset();controller.reset();selectedRun=nextPublication=0;stalls.reset();return false;}
+    // A roster for another destination can be prepared during the current run.
+    // It must not tear down this mission's accepted interactions and scene leases.
+    if(!selected) {
+        if(selectedRun && selectedRun!=run) {entry.reset();controller.reset();selectedRun=nextPublication=0;stalls.reset();}
+        return false;
+    }
     if(!load() || !entry.select(document->views(),controller,run,GetTickCount64())) {return false;}
-    if(selectedRun!=run) {lastActive=lastComplete=UINT32_MAX;lastSection=UINT8_MAX;lastFault=false;stalls.reset();}
+    if(selectedRun!=run) {lastActive=lastComplete=UINT32_MAX;lastSection=UINT8_MAX;lastFault=false;loggedSpawnCheckpoints.reset();stalls.reset();}
     selectedRun=run;return true;
 }
 bool opening_mask(std::uint64_t now) noexcept {
@@ -74,7 +82,12 @@ void observe_fly_in_complete() noexcept {
 Frame snapshot(std::uint64_t run,std::uint64_t now,bool ready) noexcept {
     poll_readiness(run,now);const std::lock_guard lock(mutex);
     if(!current() || run!=selectedRun) {return {};}
-    const auto f=entry.update(controller,run,now,ready);nextPublication=now+100;const auto d=controller.diagnostics();
+    const auto f=entry.update(controller,run,now,ready);nextPublication=now+continuation::publication_interval(f);const auto d=controller.diagnostics();
+    for(std::size_t i=0;i<std::size(kSpawnBatches);++i) if(f.spawnCheckpoints[i] && !loggedSpawnCheckpoints[i]) {
+        loggedSpawnCheckpoints.set(i);std::array<char,192> line{};
+        std::snprintf(line.data(),line.size(),"ev=homecoming stage=spawn_checkpoint run=%llu generation=%u checkpoint=%zu section=%u cohorts=%zu casts=%zu",
+            static_cast<unsigned long long>(run),f.spawnGeneration,i,static_cast<unsigned>(kSpawnBatches[i].section),kSpawnBatches[i].cohorts.size(),kSpawnBatches[i].casts.size());log(line.data());
+    }
     if(d.active!=lastActive || d.complete!=lastComplete || f.section!=lastSection || f.fault!=lastFault) {
         lastActive=d.active;lastComplete=d.complete;lastSection=f.section;lastFault=f.fault;std::array<char,320> line{};
         std::snprintf(line.data(),line.size(),"ev=vanilla_executor mission=homecoming run=%llu generation=%u section=%u active=%08X complete=%08X failure=%u finished=%u fault=%u enabled=%u",
@@ -93,6 +106,41 @@ Frame snapshot(std::uint64_t run,std::uint64_t now,bool ready) noexcept {
     return f;
 }
 Request request() noexcept {const std::lock_guard lock(mutex);return current()?Request{controller.owner(),controller.frame()}:Request{};}
+coo::Generation continuation::request() noexcept {
+    const std::lock_guard lock(mutex);
+    return current() && ready(controller.owner(),controller.frame())?controller.owner():coo::Generation{};
+}
+GrantRequest grant_request() noexcept {const std::lock_guard lock(mutex);return current()?controller.grant_request():GrantRequest{};}
+PlaybackRequest playback_request(std::uint32_t definition) noexcept {
+    const auto* scene=playback_scene(definition);if(!scene) return {};
+    const std::lock_guard lock(mutex);if(!current() || !controller.frame().enabled || controller.frame().finished) {return {};}
+    const auto request=controller.playback_request(*scene);
+    return playback_pending(request,controller.frame().scenes[scene_index(*scene)])?request:PlaybackRequest{};
+}
+void observe_playback(const PlaybackReceipt& r) noexcept {
+    const std::lock_guard lock(mutex);
+    if(current() && controller.playback(r,GetTickCount64())) {
+        std::array<char,180> line{};std::snprintf(line.data(),line.size(),
+            "ev=homecoming stage=scene_playback registry=%08X slot=%u generation=%u performance=%u entry=%u released=%04X",
+            r.request.scene.registry,r.request.scene.slot,r.request.generation,r.performanceFinished?1U:0U,r.entryCue?1U:0U,r.combatReleased);log(line.data());
+        if(r.damageReleased) {
+            std::snprintf(line.data(),line.size(),"ev=homecoming stage=scene_damage_release registry=%08X slot=%u generation=%u cast_mask=%04X",
+                r.request.scene.registry,r.request.scene.slot,r.request.generation,r.damageReleased);log(line.data());
+        }
+    }
+}
+bool observe_granted(const GrantRequest& r,std::uint64_t item) noexcept {
+    const std::lock_guard lock(mutex);return current() && controller.granted(r,item);
+}
+bool commit_grant(const GrantRequest& r,std::uint64_t item,bool complete,void* context,bool(*commit)(void*) noexcept) noexcept {
+    const std::lock_guard lock(mutex);
+    if(!current() || !r.valid() || controller.grant_request()!=r || !item || !commit || !commit(context)) {return false;}
+    return !complete || controller.granted(r,item);
+}
+void observe_scene(std::uint64_t run,std::uint32_t key,std::uint16_t slot,const middleware::bap::activity_message::scene_sense::Output& d) noexcept {
+    const std::lock_guard lock(mutex);
+    if(current() && run==selectedRun) {static_cast<void>(controller.scene(controller.owner(),asset(key,43,slot),d));}
+}
 ConsoleScanRequest console_scan_request() noexcept {
     const std::lock_guard lock(mutex);return current()?console_scan_request(controller.owner(),controller.frame()):ConsoleScanRequest{};
 }
@@ -101,6 +149,9 @@ EntranceRequest entrance_request() noexcept {
 }
 DoorRequest door_request() noexcept {
     const std::lock_guard lock(mutex);return current()?door_request(controller.owner(),controller.frame()):DoorRequest{};
+}
+ship_barrier::Request ship_barrier::request() noexcept {
+    const std::lock_guard lock(mutex);return current()?wanted(controller.owner(),controller.frame()):Request{};
 }
 std::uint64_t native_run() noexcept {const std::lock_guard lock(mutex);return current()?selectedRun:0;}
 void observe_arrival(coo::Generation owner,std::uint8_t route) noexcept {
@@ -122,7 +173,7 @@ void observe_ghost(std::uint32_t key,std::uint8_t type,std::uint16_t slot,const 
         std::array<char,180> line{};std::snprintf(line.data(),line.size(),"ev=homecoming stage=ghost generation=%d active=%u progress=%.3f scanned=%u",d.generation,d.active?1U:0U,d.progress,controller.frame().consoleScanned?1U:0U);log(line.data());
     }
 }
-bool publication_due(std::uint64_t now) noexcept {const std::lock_guard lock(mutex);return current() && controller.frame().enabled && !controller.frame().finished && now>=nextPublication;}
+bool publication_due(std::uint64_t now) noexcept {const std::lock_guard lock(mutex);return current() && controller.frame().enabled && now>=nextPublication;}
 void observe_position(float x,float y,float z) noexcept {const std::lock_guard lock(mutex);if(current()) {controller.position(selectedRun,{x,y,z});}}
 void observe_mounted(const MountedPosition& sample) noexcept {
     const std::lock_guard lock(mutex);if(!current() || !controller.mounted(sample)) {return;}

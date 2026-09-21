@@ -16,7 +16,7 @@ $receiptPath = Join-Path $validation 'installation.json'
 if (Test-Path -LiteralPath $receiptPath) { throw 'This candidate has an installation receipt; preserve that evidence.' }
 $manifest = Get-Content -Raw -LiteralPath (Join-Path $validation 'package.json') | ConvertFrom-Json
 $names = @('steam_api64.dll', 'steam_api64.pdb', 'Lua_LICENSE.txt',
-    'Dawn/scripts/one_au.lua', 'Dawn/scripts/homecoming.lua', 'Dawn/scripts/omega.lua', 'Dawn/scripts/deadly_trial.lua', 'Dawn/scripts/gateway.lua', 'Dawn/scripts/beyond_infinity.lua', 'Dawn/scripts/deep_storage.lua', 'Dawn/scripts/hijacked.lua', 'Dawn/scripts/strike_pact.lua', 'Dawn/scripts/strike_bond.lua', 'Dawn/scripts/mission_pact.lua', 'Dawn/scripts/mission_bond.lua', 'Dawn/scripts/eater_of_worlds.lua', 'Dawn/scripts/mercury_freeroam.json',
+    'Dawn/scripts/one_au.lua', 'Dawn/scripts/homecoming.lua', 'Dawn/scripts/adieu.lua', 'Dawn/scripts/omega.lua', 'Dawn/scripts/deadly_trial.lua', 'Dawn/scripts/gateway.lua', 'Dawn/scripts/beyond_infinity.lua', 'Dawn/scripts/deep_storage.lua', 'Dawn/scripts/hijacked.lua', 'Dawn/scripts/strike_pact.lua', 'Dawn/scripts/strike_bond.lua', 'Dawn/scripts/mission_pact.lua', 'Dawn/scripts/mission_bond.lua', 'Dawn/scripts/eater_of_worlds.lua', 'Dawn/scripts/mercury_freeroam.json',
     'Dawn/scripts/eden_freeroam.json', 'Dawn/scripts/fleet_freeroam.json', 'Dawn/scripts/polaris_freeroam.json', 'Dawn/scripts/planet_x_freeroam.json', 'Dawn/scripts/tangled_shore_freeroam.json', 'Dawn/scripts/dreaming_city_freeroam.json', 'Dawn/scripts/infinite_abyss.json')
 $scopeProperty = $manifest.PSObject.Properties['validationScope']
 $validationScope = if ($scopeProperty) { [string]$scopeProperty.Value } else { 'full-lua' }

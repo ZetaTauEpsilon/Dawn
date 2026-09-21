@@ -35,15 +35,25 @@ OBJECTIVES = {
                  **{s: (116, -1) for s in (112, 114, 115)}},
     0xAA9D42BE: {s: (1, -1) for s in range(4, 39)},
     0x7BA8F95D: {s: (1, -1) for s in (2, 3, 4, 5, 6, 7, 8, 11)},
-    0x2D322467: {**{s: (0, -1) for s in range(4, 12)}, **{s: (1, -1) for s in range(12, 36) if s != 33}, 33: (2, -1)},
+    # obj_deck is the authored 24-row task for BOTH deck and ship interior.
+    # Rows 10-18 reference interior/shield/escape providers 261-278. The native
+    # cost pass selects a reachable row. Source 53 is Ghaul's cinematic cast.
+    0x2D322467: {**{s: (0, -1) for s in range(4, 12)}, **{s: (1, -1) for s in range(12, 56) if s not in (33, 53)}, 33: (2, -1)},
     0x28A6B21F: {**{s: (9, 0) for s in (10, 11, 12, 13, 14, 15, 16, 17, 27)}, **{s: (43, 0) for s in range(28, 42)}},
 }
-# Cues the native runtime dispatches itself (opening cinematic and Shaxx's authored graph).
-NATIVE_OWNED_CUES = {0, 10, 21, 22, 23, 24}
+# Cues dispatched by native cinematics/graphs/performers. Ikora's performer
+# 80B3A848 embeds 66-69 AND the complete Ghost/Zavala pickup exchange (72).
+# Requeueing 72 at child completion repeats the whole conversation.
+NATIVE_OWNED_CUES = {0, 10, 21, 22, 23, 24, 66, 67, 68, 69, 72}
 # Authored graph inputs the mission may deliver to each scene (package graph evidence).
 SCENE_EVENTS = {
     (0x9D8076E4, 17): [0x6F51AC66], (0x9D8076E4, 14): [0x6F51AC66], (0x9D8076E4, 10): [0xAE7CC69C],
     (0x9D8076E4, 18): [0x6F51AC66], (0x7BA8F95D, 16): [0x84FFD4F6, 0x6F51AC66, 0x0B78A21A],
+    # Parameter 0 is the friendly frame. Stage two also releases the
+    # Cabal parameter 1's F9521E4E; stage one alone leaves it protected.
+    (0x9D8076E4, 111): [0x38857CF3, 0x18EF2ABC],
+    (0xAA9D42BE, 70): [0x18EF2ABC], (0xAA9D42BE, 72): [0x18EF2ABC],
+    (0xAA9D42BE, 74): [0x18EF2ABC], (0xAA9D42BE, 77): [0x18EF2ABC],
     (0x28A6B21F, 2): [0xB8C5C0A5, 0x1BED1ED3], (0x28A6B21F, 4): [0xC021F76C], (0x28A6B21F, 5): [0xC021F76F],
 }
 
@@ -169,14 +179,14 @@ def main():
     w('constexpr coo::Asset trigger_area(std::uint32_t registry,std::string_view name) noexcept {')
     w('    for(const auto& t:kTriggers) {if(t.sensor.registry==registry && t.name==name) {return t.area;}}return {};')
     w('}')
-    w('// members: variant-0 actor count per native category; count sums them for one request each.')
+    w('// Each populated category requests one actor; weighted template candidates are alternatives.')
     w('struct Spawn {std::uint16_t source;std::uint32_t registry,definition,offset;std::uint16_t rule;std::uint8_t count,categories;coo::native_combatant::TacticalGroup tactical;bool hasRule,sceneOwned;std::array<std::uint8_t,4> members;bool required{true};};')
     sources = d['sources']
     w('inline constexpr std::array<Spawn,%d> kSpawns{{' % len(sources))
     objective_slots = {(o['registry'], o['slot']): o for o in d['objectiveSlots']}
     for s in sources:
         cats = s['categories']
-        count = min(63, sum(len(c['selections'][0]) for c in cats))
+        count = sum(bool(c['selections'][0]) for c in cats)
         has_rule = s['ruleRegistry'] == s['registry'] and s['ruleType'] == 66
         rule = s['ruleSlot'] if has_rule else 0
         objective = OBJECTIVES.get(s['registry'], {}).get(s['slot'])
@@ -187,7 +197,7 @@ def main():
             tactical = '{}'
         scene_owned = s['slot'] in SCENE_OWNED.get(s['registry'], set())
         assert 1 <= len(cats) <= 4, (hex(s['registry']), s['slot'], len(cats))
-        members = [min(63, len(c['selections'][0])) for c in cats] + [0] * (4 - len(cats))
+        members = [int(bool(c['selections'][0])) for c in cats] + [0] * (4 - len(cats))
         w('    {%d,%s,%s,%d,%d,%d,%d,%s,%s,%s,{%s}},' % (s['slot'], hx(s['registry']), hx(s['tag']), s['offset'], rule, count, len(cats), tactical,
                                                       'true' if has_rule else 'false', 'true' if scene_owned else 'false', ','.join(str(m) for m in members)))
     w('}};')

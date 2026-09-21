@@ -17,6 +17,12 @@ public:
         frame_.forestReady=ready;return true;
     }
     bool lens(const LensReceipt&,bool dead) noexcept;
+    bool forest_terminal(coo::Generation owner,std::uint8_t pass) noexcept {
+        if(owner!=this->owner() || pass!=frame_.forestPass || !frame_.enabled || frame_.finished || !frame_.forestReady)return false;
+        if(pass==1 && frame_.section>=2 && frame_.section<=3) {frame_.navigation.forestPastComplete=true;return true;}
+        if(pass==2 && frame_.section>=4 && frame_.section<=5) {frame_.navigation.forestFutureComplete=true;return true;}
+        return false;
+    }
     bool bind_plate(const PlateReceipt&) noexcept;
     bool plate_pose(const PlateReceipt&,server::runtime::activity::mission_device_pose::Sample) noexcept;
     bool plate(const PlateReceipt&,std::uint32_t revision,float value,bool complete) noexcept;
@@ -36,6 +42,7 @@ public:
     coo::StallDetail missing(const coo::CommandSpec&) const noexcept;
     const auto& seen() const noexcept { return seen_; }
 private:
+    void update_navigation() noexcept;
     bool publish(const coo::Command&) noexcept override;
     void cancel(const coo::Command&) noexcept override {}
     void update_module(std::uint32_t,const coo::MissionInput&,Frame&) noexcept override;

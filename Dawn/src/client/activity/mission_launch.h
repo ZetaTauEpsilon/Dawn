@@ -40,5 +40,11 @@ struct Snapshot {
 [[nodiscard]] Snapshot snapshot() noexcept;
 /** Existing game-frame owner only. Orbit launch uses retail selection wrappers unchanged. */
 void poll() noexcept;
+/** Loading-only presentation lease for the confirmed Homecoming -> Exodus handoff. */
+[[nodiscard]] bool suppress_loading() noexcept;
+/** Native primary-session update owner only. Keeps orbit launches and lease
+ * cleanup alive when orbit has no camera-transform callbacks. Never runs
+ * the in-world, loading or cinematic paths from this fallback. */
+void poll_orbit(std::uintptr_t session) noexcept;
 [[nodiscard]] const char* description(Status status) noexcept;
 } // namespace dawn::client::activity::mission_launch

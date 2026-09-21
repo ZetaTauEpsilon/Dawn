@@ -19,6 +19,8 @@ struct Profile final {
 inline constexpr std::int16_t kDonorActivity = 282;
 inline constexpr Profile kTowerfall{"mission_towerfall", 266, 0x62D85FB3U,
     0x9ACCB518U, 0x80B500ACU, 0x80FDB97FU, "towerfall_direct"};
+inline constexpr Profile kAdieu{"mission_journey",288,0xB913ED3FU,
+    0xD8A28814U,0x80B5E014U,0x80C10457U,"adieu_direct"};
 inline constexpr Profile kGateway{"mission_abs", 292, 0x5A2E3FF4U,
     0x986985D0U, 0x80F46D99U, 0x80F9FDD2U, "gateway_direct"};
 inline constexpr Profile kHauntedForest{"infinite_abyss", 78, 0x56B7B6A5U,
@@ -44,6 +46,7 @@ inline constexpr Profile kOneAu{"mission_ember",281,0x38F926B2U,
     0x1A6AF329U,0x80B3C07DU,0x80FDB97FU,"one_au_direct"};
 
 [[nodiscard]] constexpr const Profile* find(std::string_view package) noexcept {
+    if(package==kAdieu.package) return &kAdieu;
     if(package==kOneAu.package) {return &kOneAu;}
     if (package == kTowerfall.package) { return &kTowerfall; }
     if (package == kGateway.package) { return &kGateway; }

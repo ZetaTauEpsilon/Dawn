@@ -4,6 +4,12 @@ namespace dawn::state::activity::vanilla::homecoming {
 bool prepare(std::uint64_t,bool) noexcept;
 Frame snapshot(std::uint64_t,std::uint64_t,bool) noexcept;
 Request request() noexcept;
+GrantRequest grant_request() noexcept;
+bool observe_granted(const GrantRequest&,std::uint64_t) noexcept;
+bool commit_grant(const GrantRequest&,std::uint64_t,bool,void*,bool(*)(void*) noexcept) noexcept;
+void observe_scene(std::uint64_t,std::uint32_t,std::uint16_t,const middleware::bap::activity_message::scene_sense::Output&) noexcept;
+PlaybackRequest playback_request(std::uint32_t definition) noexcept;
+void observe_playback(const PlaybackReceipt&) noexcept;
 bool opening_mask(std::uint64_t now) noexcept;
 void observe_fly_in_complete() noexcept;
 std::uint64_t native_run() noexcept;
@@ -26,4 +32,7 @@ void observe_door_handled() noexcept;
 // Called from the existing shared engine integration; no detour registration.
 void observe_native_object(void*) noexcept;
 void poll_bazaar_door() noexcept;
+// Called only from the native device-update boundary, never the camera poll.
+// True retains this exact device's native tick until release completes.
+bool update_ship_barrier(void* device) noexcept;
 }

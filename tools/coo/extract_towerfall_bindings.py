@@ -169,7 +169,9 @@ def objectives():
     out = []
     for index, at in enumerate(array(data, 8, 40, 0x80804F74)):
         texts = []
-        for a in array(data, at + 16, 32, 0x80804F76):
+        # Four typed hashes followed by flags: 36 bytes, not 32. The second
+        # generator variant contains the exhaust-turbine counter label.
+        for a in array(data, at + 16, 36, 0x80804F76):
             variant = []
             for j in (0, 8, 16, 24):
                 container, key = u32(data, a + j), u32(data, a + j + 4)

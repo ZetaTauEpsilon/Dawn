@@ -1,4 +1,5 @@
 #include "controller.h"
+#include "navigation.h"
 #include <bit>
 #include <cmath>
 
@@ -299,19 +300,7 @@ bool Controller::tower_arrived(coo::Generation gen) noexcept {
     frame_.finished=true;frame_.completion=lifecycle_.publication();++frame_.revision;return true;
 }
 coo::MarkerTarget Controller::marker(std::uint32_t event) const noexcept {
-    const auto navigation=[](std::uint32_t key,std::uint8_t,std::uint16_t slot) noexcept {
-        for(const auto& n:kNavigation) {if(n.asset.registry==key && n.asset.slot==slot) {return n.asset;}}
-        return coo::Asset{};
-    };
-    coo::Asset target{};
-    if(event==kObjectives[1]) {target=navigation(kExterior,47,7);}
-    else if(event==kObjectives[2]) {target=navigation(kBreachRoute,47,17);}
-    else if(event==kObjectives[3]) {target=navigation(kBreachRoute,47,21);}
-    else if(event==kObjectives[4]) {target=navigation(kBreachRoute,47,22);}
-    else if(event==kObjectives[5]) {target=navigation(kDivideRoute,47,8);}
-    else if(event==kObjectives[6] || event==kObjectives[7]) {target=navigation(kDivideRoute,47,7);}
-    else if(event==kObjectives[0] || event==kObjectives[8]) {target=navigation(kHangarRoute,47,8);}
-    return target.registry?coo::MarkerTarget{target,{0x811C9DC5U,0,0,0}}:coo::MarkerTarget{};
+    return navigation::marker(event);
 }
 bool Controller::publish(const coo::Command& c) noexcept {
     const auto& g=graph().definition;

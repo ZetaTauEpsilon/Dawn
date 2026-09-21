@@ -19,7 +19,7 @@ constexpr std::uint8_t bubble_of(Section s) noexcept {
     default:return 8;
     }
 }
-enum class Mechanic : std::uint32_t { restrict=1,allow,finishSection,arm,disarm,stopScene,retireMember,powerOff,pickup,releaseDoor,music };
+enum class Mechanic : std::uint32_t { restrict=1,allow,finishSection,arm,disarm,stopScene,retireMember,powerOff,pickup,releaseDoor,music,assaultRepelled };
 // Bank 80B5090F authored sections (FNV-1 names recovered from the descriptor). The unnamed
 // ordinals between first_pod and battleship_deck follow the mission order; the two the
 // authored music volumes point at are used positionally and marked inferred.
@@ -29,16 +29,28 @@ inline constexpr std::uint8_t underwatchRuins=0,firstCabal=1,afterCayde=3,shaxxD
     count=20,none=0xFF;
 }
 // Observations the controller derives from several receipts rather than one asset.
-enum class Milestone : std::uint32_t { caydeNear=0x300,shaxxNear,consoleScanned,generatorA,generatorB,generatorC };
+enum class Milestone : std::uint32_t { caydeNear=0x300,shaxxNear,consoleScanned,generatorA,generatorB,generatorC,weaponGranted,turbineFirst,turbineSecond };
+enum class SceneEvent : std::uint32_t { started=1,completed,inputsApplied,performanceFinished,entryCue,combatOpeningReleased,combatDamageReleased,combatHeld };
 // Type-4 observation arguments.
 enum class ObjectEvent : std::uint32_t { present=1,used };
-// The dead Zavala interactable is the only native use subscription in this mission.
+// Ordinary dialogue observations wait through the authored voice window.
+// This bit selects the accepted native dispatch instead of its end.
+inline constexpr std::uint32_t kDialogueStarted=0x100U;
+// Authored armory racks and the dead Zavala interactable use accepted native holds.
 inline constexpr auto kReviveInteract=asset(kPlaza,4,24),kConsoleLink=asset(kShip,65,166),kBazaarDoor=asset(kBoulevard,23,9);
-constexpr bool use_subscription(coo::Asset a) noexcept {return a==kReviveInteract;}
+// Retail Homecoming offers the auto rifle rack. The other three racks are beta
+// alternatives, not additional rewards. One accepted hold supplies both weapons.
+inline constexpr coo::Asset kPickups[]{asset(kUnderwatch,4,103)};
+// Deliver the sidearm first so the Origin Story auto rifle is equipped last.
+inline constexpr std::uint32_t kArmoryRewards[]{0x654C35C4U,0xEFD9F21FU};
+constexpr std::size_t pickup_index(coo::Asset a) noexcept {
+    for(std::size_t i=0;i<std::size(kPickups);++i) {if(a==kPickups[i]) return i;}return std::size(kPickups);
+}
+constexpr bool use_subscription(coo::Asset a) noexcept {return a==kReviveInteract || pickup_index(a)<std::size(kPickups);}
 enum class Cohort : std::uint8_t { underwatchCast,breachBackup,breachApproach,centurionRush,centurionBackup,
     hallwayDestruction,overlookStart,gateStartClear,friendlies,corridor,gateHangarClear,hangarFloor,
-    plazaInit,wave1,interim,wave2,wave3,bazaarStart,bazaarMid,bazaarFar,bazaarEnd,bazaarAll,
-    pods,damaged,hall,stairs,deckA,deckB,hardpoints,boss,airlock,matrix,engineUpper,engineLower,generatorGuards,escape,count };
+    plazaInit,wave1,interim,wave2,wave3,ikoraCabal,bazaarStart,bazaarMid,bazaarFar,bazaarEnd,bazaarAll,
+    pods,damaged,hall,stairs,deckA,deckB,hardpoints,boss,airlock,matrix,engineUpper,engineLower,generatorGuards,escape,firstContactClear,count };
 struct Member {std::uint32_t registry;std::uint16_t slot;};
 struct CohortBinding {Cohort id;std::span<const Member> members;};
 template<std::uint32_t Registry,std::size_t N>
@@ -50,9 +62,11 @@ consteval auto cohort_members(const std::uint16_t (&slots)[N]) noexcept {
 // source definitions still own category selection, placement and actor creation.
 // Loose crash-site cast: the Red Guard, the fake fight and the wall-sitting civilians. Every
 // posed, reacting or running civilian is owned by its authored Scene; the standing civilian
-// (36) and the aiming guard (113) stood in the Cayde and armory doorways and are omitted.
-inline constexpr auto kUnderwatchCast=cohort_members<kUnderwatch>({42,12,13,37,38,39});
+// (36) and the aiming guard (113) are omitted. Live actor/source inspection at the
+// Shaxx doorway identified wall_sit_c (39), not source 36, overlapping the player.
+inline constexpr auto kUnderwatchCast=cohort_members<kUnderwatch>({42,12,13,37,38});
 inline constexpr auto kBreachBackup=cohort_members<kUnderwatch>({8,9});
+inline constexpr auto kFirstContactClear=cohort_members<kUnderwatch>({6,8,9});
 // Clearance only: the breach and Centurion actors are Scene-owned and never placed loosely.
 inline constexpr auto kBreachApproach=cohort_members<kUnderwatch>({6,8,9,20,22,23});
 inline constexpr auto kCenturionRush=cohort_members<kUnderwatch>({22});
@@ -72,6 +86,7 @@ inline constexpr auto kWave1=cohort_members<kPlaza>({28,29});
 inline constexpr auto kInterim=cohort_members<kPlaza>({40,41});
 inline constexpr auto kWave2=cohort_members<kPlaza>({31,33,34,35});
 inline constexpr auto kWave3=cohort_members<kPlaza>({36,37,38,39});
+inline constexpr auto kIkoraCabal=cohort_members<kBoulevard>({19,20,21,22});
 inline constexpr auto kBazaarStart=cohort_members<kBoulevard>({6,11,8});
 inline constexpr auto kBazaarMid=cohort_members<kBoulevard>({7,4});
 inline constexpr auto kBazaarFar=cohort_members<kBoulevard>({3});
@@ -97,14 +112,64 @@ inline constexpr CohortBinding kCohorts[]{
     {Cohort::hallwayDestruction,kHallwayDestruction},{Cohort::overlookStart,kOverlookStart},{Cohort::gateStartClear,kGateStartClear},
     {Cohort::friendlies,kFriendlies},{Cohort::corridor,kCorridor},
     {Cohort::gateHangarClear,kGateHangarClear},{Cohort::hangarFloor,kHangarFloor},
-    {Cohort::plazaInit,kPlazaInit},{Cohort::wave1,kWave1},{Cohort::interim,kInterim},{Cohort::wave2,kWave2},{Cohort::wave3,kWave3},
+    {Cohort::plazaInit,kPlazaInit},{Cohort::wave1,kWave1},{Cohort::interim,kInterim},{Cohort::wave2,kWave2},{Cohort::wave3,kWave3},{Cohort::ikoraCabal,kIkoraCabal},
     {Cohort::bazaarStart,kBazaarStart},{Cohort::bazaarMid,kBazaarMid},{Cohort::bazaarFar,kBazaarFar},{Cohort::bazaarEnd,kBazaarEnd},
     {Cohort::bazaarAll,kBazaarAll},
     {Cohort::pods,kPods},{Cohort::damaged,kDamaged},{Cohort::hall,kHall},{Cohort::stairs,kStairs},{Cohort::deckA,kDeckA},{Cohort::deckB,kDeckB},
     {Cohort::hardpoints,kHardpoints},{Cohort::boss,kBoss},{Cohort::airlock,kAirlock},{Cohort::matrix,kMatrix},
-    {Cohort::engineUpper,kEngineUpper},{Cohort::engineLower,kEngineLower},{Cohort::generatorGuards,kGeneratorGuards},{Cohort::escape,kEscape}
+    {Cohort::engineUpper,kEngineUpper},{Cohort::engineLower,kEngineLower},{Cohort::generatorGuards,kGeneratorGuards},{Cohort::escape,kEscape},
+    {Cohort::firstContactClear,kFirstContactClear}
 };
 static_assert(std::size(kCohorts)==static_cast<std::size_t>(Cohort::count));
+// Population checkpoints are distinct from scene/door/dialogue triggers. A batch
+// requests its entire encounter in one controller publication. Scene casts are
+// reserved at authored placements, but their graphs and inputs still start at
+// their individual route cues. Later assaults are NEVER part of the plaza batch.
+enum class SpawnCheckpoint : std::uint8_t {
+    hallway,firstContact,centurionRush,dropPod,shaxx,armory,hangar,hallwayPod,plaza,assault1,assault2,assault3,boulevard,shipInterior,shipDeck,generator,escape,count
+};
+struct SpawnBatch {
+    SpawnCheckpoint id;Section section;
+    std::span<const Cohort> cohorts;
+    std::span<const coo::Asset> casts;
+};
+inline constexpr Cohort kHallwayBatch[]{Cohort::underwatchCast};
+inline constexpr Cohort kFirstContactBatch[]{Cohort::breachBackup},kCenturionRushBatch[]{Cohort::centurionRush},kDropPodBatch[]{Cohort::centurionBackup};
+inline constexpr coo::Asset kShaxxCast[]{asset(kUnderwatch,43,14)};
+inline constexpr coo::Asset kArmoryCasts[]{asset(kUnderwatch,43,111)};
+inline constexpr Cohort kHangarBatch[]{Cohort::overlookStart,Cohort::friendlies,Cohort::corridor,Cohort::hangarFloor};
+inline constexpr Cohort kHallwayPodBatch[]{Cohort::hallwayDestruction};
+inline constexpr coo::Asset kHangarCasts[]{asset(kMilitary,43,70),asset(kMilitary,43,72),asset(kMilitary,43,74),asset(kMilitary,43,77)};
+inline constexpr Cohort kPlazaBatch[]{Cohort::plazaInit},kAssault1Batch[]{Cohort::wave1,Cohort::interim},
+    kAssault2Batch[]{Cohort::wave2},kAssault3Batch[]{Cohort::wave3};
+inline constexpr coo::Asset kPlazaCasts[]{asset(kPlaza,43,2)},kBoulevardCasts[]{asset(kBoulevard,43,16)};
+inline constexpr Cohort kBoulevardBatch[]{Cohort::bazaarAll};
+inline constexpr Cohort kShipInteriorBatch[]{Cohort::pods,Cohort::damaged,Cohort::hall,Cohort::stairs};
+inline constexpr Cohort kShipDeckBatch[]{Cohort::deckA,Cohort::deckB,Cohort::hardpoints,Cohort::boss};
+// Retain the preloaded boss without resetting its generation/deaths; this also
+// covers a late route sample that reaches the boss section before the stair cue.
+inline constexpr Cohort kGeneratorBatch[]{Cohort::boss,Cohort::airlock,Cohort::matrix,Cohort::engineUpper,Cohort::engineLower,Cohort::generatorGuards};
+inline constexpr Cohort kEscapeBatch[]{Cohort::escape};
+inline constexpr SpawnBatch kSpawnBatches[]{
+    {SpawnCheckpoint::hallway,Section::underwatch,kHallwayBatch,{}},
+    {SpawnCheckpoint::firstContact,Section::underwatch,kFirstContactBatch,{}},
+    {SpawnCheckpoint::centurionRush,Section::underwatch,kCenturionRushBatch,{}},
+    {SpawnCheckpoint::dropPod,Section::underwatch,kDropPodBatch,{}},
+    {SpawnCheckpoint::shaxx,Section::underwatch,{},kShaxxCast},
+    {SpawnCheckpoint::armory,Section::armory,{},kArmoryCasts},
+    {SpawnCheckpoint::hangar,Section::military,kHangarBatch,kHangarCasts},
+    {SpawnCheckpoint::hallwayPod,Section::military,kHallwayPodBatch,{}},
+    {SpawnCheckpoint::plaza,Section::plaza,kPlazaBatch,kPlazaCasts},
+    {SpawnCheckpoint::assault1,Section::plaza,kAssault1Batch,{}},
+    {SpawnCheckpoint::assault2,Section::plazaWaves,kAssault2Batch,{}},
+    {SpawnCheckpoint::assault3,Section::plazaWaves,kAssault3Batch,{}},
+    {SpawnCheckpoint::boulevard,Section::boulevard,kBoulevardBatch,kBoulevardCasts},
+    {SpawnCheckpoint::shipInterior,Section::ship,kShipInteriorBatch,{}},
+    {SpawnCheckpoint::shipDeck,Section::ship,kShipDeckBatch,{}},
+    {SpawnCheckpoint::generator,Section::generator,kGeneratorBatch,{}},
+    {SpawnCheckpoint::escape,Section::generator,kEscapeBatch,{}}
+};
+static_assert(std::size(kSpawnBatches)==static_cast<std::size_t>(SpawnCheckpoint::count));
 // Per-category loose request counts. Defaults request every authored category once;
 // the plaza waves and the relocated corridor request more of an authored category.
 struct RequestOverride {std::uint32_t registry;std::uint16_t source;std::array<std::uint8_t,4> requests;};

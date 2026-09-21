@@ -13,8 +13,7 @@ namespace entrance=hc::entrance_native;
 namespace console=hc::console_native;
 namespace gn=gateway_native;
 inline std::atomic_flag busy=ATOMIC_FLAG_INIT;
-// A validated table view avoids thousands of process-memory queries per device
-// callback. SEH still guards each access if an allocation disappears mid-scan.
+// SEH guards every access if an allocation disappears during this callback.
 inline bool copy(const void* source,void* out,std::size_t bytes) noexcept {
     __try { std::memcpy(out,source,bytes);return true; }
     __except(EXCEPTION_EXECUTE_HANDLER) { return false; }
@@ -63,7 +62,8 @@ __declspec(noinline) inline void update(std::uintptr_t image,void* component) no
     const auto wanted=hc::entrance_request();
     if(!component || busy.test_and_set(std::memory_order_acquire)) return;
     struct Unlock { ~Unlock(){busy.clear(std::memory_order_release);} } unlock;
-    if(!wanted.enabled()) {report(wanted,"inactive",UINT32_MAX);return;}
+    static entrance::SweepGate sweep;
+    if(!entrance::eligible(wanted)) {sweep.reset();report(wanted,"inactive",UINT32_MAX);return;}
     World world{image};gn::Read read{world.base};
     std::uint32_t stride{},callbackEntity{};std::array<unsigned char,16> setter{};
     if(!read.value(world.base+entrance::kEntities,world.table) || world.table<0x10000
@@ -73,15 +73,25 @@ __declspec(noinline) inline void update(std::uintptr_t image,void* component) no
     if(!read.value(reinterpret_cast<std::uintptr_t>(component)+0x2C,callbackEntity)) {
         report(wanted,"callback_unreadable",UINT32_MAX);return;
     }
+    const bool fullScan=sweep.due(wanted,world.table,GetTickCount64());
+    if(!fullScan) {
+        entrance::Row row{};bool owned{};
+        if(callbackEntity==UINT32_MAX || !world.row(callbackEntity&0x1FFFU,row)
+            || row.entity!=callbackEntity || !row.live(callbackEntity&0x1FFFU)
+            || !entrance::door(row,wanted.section) || !world.owned(callbackEntity,owned) || owned) return;
+    }
     if(!read.value(world.base+console::kAuthoritySetter,setter) || setter!=console::kSetterPrefix) {
         report(wanted,"signature_mismatch",callbackEntity);return;
     }
-    if(!omega_native_memory::readable(reinterpret_cast<const void*>(world.table),entrance::kRows*entrance::kStride)
-        || !omega_native_memory::readable(reinterpret_cast<const void*>(image+console::kAuthorityTable),native_authority_bitmap::View::kBytes)) {
+    if(fullScan && (!omega_native_memory::readable(reinterpret_cast<const void*>(world.table),entrance::kRows*entrance::kStride)
+        || !omega_native_memory::readable(reinterpret_cast<const void*>(image+console::kAuthorityTable),native_authority_bitmap::View::kBytes))) {
         report(wanted,"table_unreadable",callbackEntity);return;
     }
-    const auto result=entrance::repair(world,wanted,[] {return hc::entrance_request();});
-    report(wanted,"scanned",callbackEntity,result);
+    const auto current=[] {return hc::entrance_request();};
+    const auto result=fullScan?entrance::repair(world,wanted,current)
+        :entrance::repair_callback(world,wanted,callbackEntity,current);
+    // Do not alternate heartbeat statuses on the per-device fast path.
+    if(fullScan || result.doors) report(wanted,"scanned",callbackEntity,result);
     if(result.doors) {
         std::array<char,224> line{};
         const int n=std::snprintf(line.data(),line.size(),"ev=homecoming stage=entrance_repair run=%llu generation=%u section=%u doors=%u",

@@ -41,21 +41,20 @@ inline constexpr bool required(const native::Group& group) noexcept {
 inline constexpr std::size_t kRequiredGroups=[] { std::size_t n{};for(const auto& g:native::kGroups) { if(required(g)) { ++n; } }return n; }();
 static_assert(kRequiredGroups+2+3<=wire::kGroupCapacity); // roots and all three cinematic owners
 inline constexpr std::uint64_t kRootBubbles=0x3FFULL;
-template<class FindGroup>
-[[nodiscard]] bool prepare_layout(layouts::Definition& layout,FindGroup find) noexcept {
+template<class FindIndex,class FindGroup>
+[[nodiscard]] bool prepare_layout(layouts::Definition& layout,FindIndex findIndex,FindGroup find) noexcept {
     if(layout.tag!=native::kScenario || layout.nameLength!=kPackage.size()
         || std::string_view(layout.name.data(),layout.nameLength)!=kPackage
         || layout.bubbleCount!=kBubbleCount) { return false; }
     const native::Group* root{};
     for(const auto& group:native::kGroups) { if(group.key==native::kRoot) { if(root) { return false; }root=&group; } }
     if(!root) { return false; }
-    layouts::RosterGroup verified{};std::size_t index=root->hint;
-    bool resolved=find(index,verified) && matches(verified,*root);
-    for(std::size_t i=0;!resolved && i<layouts::kRosterGroupCapacity;++i) {
-        if(!find(i,verified)) { break; }
-        if(matches(verified,*root)) { index=i;resolved=true; }
-    }
-    if(!resolved || index>=layouts::kRosterGroupCapacity) { return false; }
+    // Extraction order is not stable. Find the exact key/tag without copying
+    // thousands of large slot records on every periodic publication. Keep the
+    // complete descriptor validation, including after catalog replacement.
+    layouts::RosterGroup verified{};std::uint16_t index{};
+    if(!findIndex(root->key,root->tag,index) || index>=layouts::kRosterGroupCapacity
+        || !find(index,verified) || !matches(verified,*root)) { return false; }
     layout.authoredGroupCounts={};layout.authoredGroups={};
     for(std::size_t bubble=0;bubble<layout.bubbleCount;++bubble) {
         if((kRootBubbles&(1ULL<<bubble))==0) { continue; }

@@ -47,7 +47,7 @@ template<class Writer> bool write_body(Writer& writer,const Frame& frame,std::ui
     if(body_bits(frame,key,type,slot)==0) { return false; }
     if(key==0x986985D0U) {
         if(type==53) { return coo::native_presentation::dialogue(writer,frame.generations,frame.activeRow); }
-        if(frame.services) { return coo::native_presentation::objective(writer,frame.presentation); }
+        if(frame.services) { return coo::native_presentation::waypoint_objective(writer,frame.presentation); }
         if(!frame.finished) { return coo::native_presentation::directive(writer,frame.objective); }
         // Retire the Vance objective after the validated ending timeline finishes.
         using namespace coo::native_presentation;

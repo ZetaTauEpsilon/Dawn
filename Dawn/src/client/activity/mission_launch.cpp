@@ -7,6 +7,7 @@
 #include "mission_launch_testing.h"
 #include <Windows.h>
 #include <array>
+#include <atomic>
 #include <cstring>
 #include <cstdio>
 #include "../../state/build_data/activities/activity_catalog.h"
@@ -15,12 +16,15 @@
 #include "../../state/activity/runtime.h"
 #include "../../state/activity/gateway_intro.h"
 #include "../../state/activity/vanilla/homecoming/prologue.h"
+#include "../../state/activity/vanilla/homecoming/continuation.h"
 #include "../../state/activity/destination/activity_destination_snapshot.h"
 #include "../../core/logging/log.h"
 
 namespace dawn::client::activity::mission_launch {
 namespace {
 SRWLOCK g_lock{SRWLOCK_INIT};
+std::atomic_flag g_polling=ATOMIC_FLAG_INIT;
+bool g_orbitPollReported{}; // Native primary-session update owner only.
 Snapshot g_state{};
 std::uint64_t g_requestedAt{};
 // Game-thread-only receipt state, scoped to a successfully submitted request.
@@ -60,6 +64,7 @@ std::uint64_t now() noexcept {
 #endif
 }
 #include "gateway_intro_native.inl"
+#include "homecoming_continuation.inl"
 namespace prologue = state::activity::vanilla::homecoming::prologue;
 /** @return True when the installed catalog carries the opening video activity before Homecoming. */
 bool prologue_available() noexcept {
@@ -88,6 +93,7 @@ void finish(Status status) noexcept {
     g_state.busy = status == Status::queued || status == Status::preparing || status == Status::cinematics;
     const auto state = g_state;
     ReleaseSRWLockExclusive(&g_lock);
+    if(!state.busy) clear_homecoming_continuation();
     if (status != Status::queued && status != Status::arrived && status != Status::preparing && status != Status::cinematics) {
         if(intro::active()) intro::fail();
         if(prologue::active()) prologue::fail();
@@ -115,6 +121,10 @@ Snapshot snapshot() noexcept {
     const auto result = g_state;
     ReleaseSRWLockShared(&g_lock);
     return result;
+}
+bool suppress_loading() noexcept {
+    const auto until=g_homecomingLoadingUntil.load(std::memory_order_acquire);
+    return until && now()<until;
 }
 bool request(std::uint16_t index) noexcept {
     AcquireSRWLockExclusive(&g_lock);
@@ -150,8 +160,28 @@ bool request_variant(std::size_t mission, state::activity::strikes::Difficulty d
     ReleaseSRWLockExclusive(&g_lock);
     return true;
 }
+void poll_orbit(std::uintptr_t session) noexcept {
+    const auto base=reinterpret_cast<std::uintptr_t>(GetModuleHandleW(nullptr));
+    const auto step=resolve<Step>(base,0xE2D510,{0x48,0x83,0xEC,0x28,0xE8,0x07,0x83,0x00});
+    if(!step || step()!=29) {g_orbitPollReported=false;return;}
+    const auto world=resolve<World>(base,0xC03430,{0x40,0x56,0x48,0x83,0xEC,0x30,0x48,0x8B});
+    const auto manager=world?world():0;std::int32_t primary{};
+    if(!manager || !read(manager+0x10,primary) || primary<0 || primary>3
+        || session!=manager+0x18+static_cast<std::uintptr_t>(primary)*0x1C8A0) return;
+    if(!g_orbitPollReported) {
+        g_orbitPollReported=true;
+        core::log::write(core::log::Channel::client,core::log::Level::info,
+            "ev=mission_launch stage=orbit_update_owner result=ready");
+    }
+    poll();
+}
 void poll() noexcept {
+    // Camera and primary-session callbacks can meet at an orbit transition.
+    // Native selection may also re-enter an update: submit at most once.
+    if(g_polling.test_and_set(std::memory_order_acquire)) return;
+    struct PollScope {~PollScope(){g_polling.clear(std::memory_order_release);}} scope;
     const auto state = snapshot();
+    const bool continuing=state.busy && g_homecomingOwner.valid() && state.index==continuation::kTargetActivity;
     // Requests are immutable until this owner completes them; the timestamp follows that lock.
     AcquireSRWLockShared(&g_lock);
     const auto started = g_requestedAt;
@@ -159,6 +189,7 @@ void poll() noexcept {
     const auto base = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(nullptr));
     const auto step = resolve<Step>(base, 0xE2D510, {0x48,0x83,0xEC,0x28,0xE8,0x07,0x83,0x00});
     const auto currentStep = step ? step() : -1;
+    poll_homecoming_loading(currentStep);
     const auto sessionId = state::activity::newest_joined_session();
     state::activity::destination::DestinationSelection actual{};
     const bool inMission = currentStep == 38 && sessionId != 0
@@ -180,7 +211,8 @@ void poll() noexcept {
     ReleaseSRWLockExclusive(&g_lock);
     // Keep the native flag through loading and clear the lease once back in orbit.
     if (inMission) {
-        (void)campaign_dialogue::select(actual.activityIndex);
+        if(!(continuing && state.status==Status::queued && sessionId==g_homecomingSession))
+            (void)campaign_dialogue::select(actual.activityIndex);
         const auto run = state::activity::mission_run_generation();
         state::activity::nightfall::enter(sessionId, actual.activityIndex, run);
         const std::string_view actualPackage{reinterpret_cast<const char*>(actual.packageName.data()), actual.packageNameLength};
@@ -191,7 +223,10 @@ void poll() noexcept {
         (void)campaign_dialogue::select(-1);
         state::activity::nightfall::leave();
     }
-    if (!state.busy) { return; }
+    if (!state.busy) {
+        if(inMission) queue_homecoming_continuation(actual,sessionId);
+        return;
+    }
     if (!step) { finish(Status::nativeUnavailable); return; }
     const auto rows = state::build_data::activities::entries();
     const bool gateway=state.index==intro::kMission && (state.opening || !state.manual);
@@ -221,6 +256,7 @@ void poll() noexcept {
     }
     if (state.status == Status::queued) {
         if(gateway) gateway_depart(base,currentStep);
+        if(continuing && inMission && homecoming_source(actual)) homecoming_depart(base,currentStep,sessionId);
         g_leftOrbit = g_leftOrbit || currentStep != 29;
         if (g_leftOrbit && inMission && sessionId != g_previousSession && state.index < rows.size()) {
             const bool matches = arrival_matches(state, actual, rows);
@@ -231,6 +267,12 @@ void poll() noexcept {
         if (now() - started > 120000) { finish(Status::timedOut); }
         return;
     }
+    if(continuing && (!inMission || !homecoming_source(actual) || sessionId!=g_homecomingSession
+        || g_homecomingOwner.run!=state::activity::mission_run_generation()
+        || continuation::request()!=g_homecomingOwner)) {finish(Status::returnToOrbit);return;}
+    const auto notReady=[&] {
+        finish(continuing && now()-started<=10000?Status::preparing:Status::notReady);
+    };
     if (rows.empty()) { finish(Status::catalogUnavailable); return; }
     if (state.index >= rows.size() || rows[state.index].name().empty()) {
         finish(Status::entryUnavailable); return;
@@ -255,10 +297,10 @@ void poll() noexcept {
         // A staged Homecoming override is not operational yet, but Chosen would activate it.
         if (forced::active(effective) || forced::override_active()) { finish(Status::overrideActive); return; }
     }
-    // Captured retail setup:orbit is 29. In-world exit/reclassification belongs to the native
-    // activity lifecycle and is deliberately not synthesized by this UI request adapter.
+    // Public launches require orbit (29). Only receipt-gated campaign continuations
+    // can submit from in_world (38); the committed native transition owns teardown.
     const bool departingBriefing=gateway && state.status==Status::cinematics && intro::wanted()==intro::kMission;
-    if (currentStep != 29 && !(departingBriefing && currentStep==38)) { finish(Status::returnToOrbit); return; }
+    if (currentStep != 29 && !((departingBriefing || continuing) && currentStep==38)) { finish(Status::returnToOrbit); return; }
     const auto world = resolve<World>(base,0xC03430,{0x40,0x56,0x48,0x83,0xEC,0x30,0x48,0x8B});
     const auto sessionReady = resolve<Ready>(base,0x1788810,{0x83,0xB9,0x6C,0x08,0x00,0x00,0x00,0x0F});
     const auto memberReady = resolve<Ready>(base,0x178D740,{0x4C,0x8B,0xC1,0x48,0x63,0x89,0x3C,0xE9});
@@ -271,21 +313,24 @@ void poll() noexcept {
     const auto commit = resolve<Commit>(base,0xBF97D0,{0x89,0x4C,0x24,0x08,0x48,0x83,0xEC,0x38});
     if (!world || !sessionReady || !memberReady || !record || !construct || !valid || !name
         || !clear || !select || !commit) { finish(Status::nativeUnavailable); return; }
+    if(continuing && !resolve<Leave>(base,0xE2DEB0,{0x48,0x89,0x5C,0x24,0x18,0x55,0x56,0x57})) {
+        finish(Status::nativeUnavailable);return;
+    }
     const auto manager = world();
     std::int32_t primary{}, sessionState{}, member{};
     if (!manager || !read(manager + 0x10, primary) || primary < 0 || primary > 3) {
-        finish(Status::notReady); return;
+        notReady(); return;
     }
     const auto session = manager + 0x18 + static_cast<std::uintptr_t>(primary) * 0x1C8A0;
     if (!read(session + 0x1AEF8, sessionState) || sessionState < 4 || sessionState > 9
         || !sessionReady(session) || !memberReady(session)
         || !read(session + 0xE93C, member) || member < 0 || member >= 12) {
-        finish(Status::notReady); return;
+        notReady(); return;
     }
     const auto current = record(static_cast<std::uint32_t>(member));
     std::uint8_t launchState{};
     if (!current || !read(current + 0xA33, launchState) || launchState >= 3) {
-        finish(Status::notReady); return;
+        notReady(); return;
     }
     const auto index = gateway ? (state.status==Status::cinematics ? intro::wanted() : intro::kIntroduction)
         : homecoming ? (state.status==Status::cinematics ? prologue::wanted() : prologue::kVideo)
@@ -339,8 +384,8 @@ void poll() noexcept {
         finish(Status::cinematics);return;
     }
     std::uint64_t departureNonce{};
-    if(departingBriefing) {
-        if(!gateway_nonce(session,departureNonce)) return;
+    if(departingBriefing || continuing) {
+        if(!gateway_nonce(session,departureNonce)) {if(continuing) notReady();return;}
         std::memcpy(selection.data()+0x10,&departureNonce,sizeof departureNonce);
         if(!valid(selection.data())) {finish(Status::descriptorRejected);return;}
     }
@@ -355,6 +400,12 @@ void poll() noexcept {
     state::activity::nightfall::arm(index, state.nightfallOptions);
     select(0, selection.data());
     commit(1);
+    if(continuing) {
+        g_homecomingExit={session,departureNonce,g_homecomingOwner.run,true};
+        AcquireSRWLockExclusive(&g_lock);g_requestedAt=now();ReleaseSRWLockExclusive(&g_lock);
+        core::log::write(core::log::Channel::client,core::log::Level::info,
+            "ev=homecoming stage=continuation result=queued activity=288");
+    }
     if(departingBriefing) {
         static_cast<void>(intro::queued(index,now()));
         g_gatewayExit={session,departureNonce,state::activity::mission_run_generation(),true};

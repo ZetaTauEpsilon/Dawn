@@ -78,6 +78,34 @@ int main(){
     voice::Lease fullLease;bool changed{};
     check(!fullLease.apply(full,296,changed)&&!fullLease.active&&full.count==100,"full override storage cannot overflow");
     full.count=101;check(!fullLease.apply(full,296,changed),"malformed native override count rejected");
+    check(voice::requested(266) && !voice::requested(265) && !voice::requested(288),
+        "veteran override is scoped to Homecoming gameplay, not its video or Adieu");
+    for(const auto prior:{-1,0,1,2}) {
+        voice::Flags flags{};flags.rows[flags.count++]={70,2,0};
+        for(const auto flag:voice::kFlags) if(flag!=voice::kFlag && prior>=0) {
+            flags.rows[flags.count++]={flag,static_cast<std::uint8_t>(prior),0};
+        }
+        voice::SelectionLease lease;
+        check(lease.apply(flags,266,changed) && changed==(prior!=2) && lease.active,"Homecoming leases all veteran choices atomically");
+        for(const auto flag:voice::kFlags) if(flag!=voice::kFlag) {
+            unsigned count{};for(std::size_t i=0;i<flags.count;++i) if(flags.rows[i].slot==flag) {++count;check(flags.rows[i].value==2,"veteran condition is true");}
+            check(count==1,"one override per veteran condition");
+        }
+        check(lease.apply(flags,266,changed) && !changed,"standing in Homecoming does not repeatedly commit veteran flags");
+        flags.rows[flags.count++]={71,1,0};
+        check(lease.apply(flags,296,changed) && lease.active,"campaign selection restores veteran flags and retains its own policy");
+        for(const auto flag:voice::kFlags) if(flag!=voice::kFlag) {
+            unsigned count{};for(std::size_t i=0;i<flags.count;++i) if(flags.rows[i].slot==flag) {++count;check(flags.rows[i].value==prior,"previous veteran state restored");}
+            check(count==static_cast<unsigned>(prior>=0),"absent veteran overrides are removed on departure");
+        }
+        check(lease.apply(flags,-1,changed) && !lease.active,"orbit releases every dialogue policy lease");
+        check(flags.rows[0].slot==70 && flags.rows[flags.count-1].slot==71,"dialogue leases preserve unrelated live investment changes");
+    }
+    voice::Flags crowded{};crowded.count=98;
+    for(unsigned i=0;i<98;++i) crowded.rows[i]={static_cast<std::uint16_t>(i+100),1,0};
+    voice::SelectionLease veteranLease;
+    check(!veteranLease.apply(crowded,266,changed) && !veteranLease.active && !changed && crowded.count==98,
+        "insufficient room for all veteran flags leaves the entire native record unchanged");
 
     for(const bool campaign:{false,true}){
         auto d=document(campaign?"mission_pact.lua":"strike_pact.lua");

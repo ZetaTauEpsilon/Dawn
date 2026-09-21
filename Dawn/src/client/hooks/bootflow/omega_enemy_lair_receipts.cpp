@@ -8,6 +8,7 @@
 #include "native_generated_roster.h"
 #include "../../../state/activity/vanilla/one_au/runtime.h"
 #include "../../../state/activity/vanilla/homecoming/runtime.h"
+#include "../../../state/activity/vanilla/adieu/runtime.h"
 #include <Windows.h>
 #include <intrin.h>
 #include <bit>
@@ -74,8 +75,10 @@ namespace garden=state::activity::strike_bond;
 namespace launchpad=state::activity::newlight::launchpad;
 namespace oneau=state::activity::vanilla::one_au;
 namespace hc=state::activity::vanilla::homecoming;
-struct Context final { bool enabled;std::uint64_t run;bool gateway;bool trial{};bool deep{};bool strike{};bool hijacked{};bool garden{};bool launchpad{};bool oneAu{};bool homecoming{}; };
+namespace adieu=state::activity::vanilla::adieu;
+struct Context final { bool enabled;std::uint64_t run;bool gateway;bool trial{};bool deep{};bool strike{};bool hijacked{};bool garden{};bool launchpad{};bool oneAu{};bool homecoming{};bool adieu{}; };
 Context selected_context() noexcept {
+    if(const auto run=adieu::native_run()) return {.enabled=true,.run=run,.adieu=true};
     if(const auto run=hc::native_run()) return {.enabled=true,.run=run,.homecoming=true};
     if(const auto run=oneau::native_run()) return {.enabled=true,.run=run,.oneAu=true};
     if(const auto run=launchpad::native_run()) return {.enabled=true,.run=run,.launchpad=true};
@@ -229,16 +232,22 @@ enum : std::uint8_t {
     kSourceDefinitionRef=1,kSourceUnknownResource,kSourceResolve,kSourceRegistry,
     kSourceType,kSourceSlot,kSourceGenerationRead
 };
-bool source(Read& read,std::uintptr_t instance,Source& source,bool gatewayContext,bool trialContext,bool deepContext,bool strikeContext,bool hijackedContext,bool gardenContext,bool launchpadContext,bool oneAuContext,bool homecomingContext) noexcept {
+bool source(Read& read,std::uintptr_t instance,Source& source,bool gatewayContext,bool trialContext,bool deepContext,bool strikeContext,bool hijackedContext,bool gardenContext,bool launchpadContext,bool oneAuContext,bool homecomingContext,bool adieuContext) noexcept {
     source.reason=0;source.nativeRegistry=0;source.nativeType=0;source.nativeSlot=-1;
     source.expectedRegistry=0;source.expectedSlot=0;
     Ref definition{};
-    if(!read.value(instance,definition) || definition.kind!=0x8080948FU || (!gatewayContext && !trialContext && !deepContext && !strikeContext && !hijackedContext && !gardenContext && !launchpadContext && !oneAuContext && !homecomingContext && definition.offset!=0x728)) {
+    if(!read.value(instance,definition) || definition.kind!=0x8080948FU || (!gatewayContext && !trialContext && !deepContext && !strikeContext && !hijackedContext && !gardenContext && !launchpadContext && !oneAuContext && !homecomingContext && !adieuContext && definition.offset!=0x728)) {
         source.resource=definition.handle;source.kind=definition.kind;source.reason=kSourceDefinitionRef;return false;
     }
     source.resource=definition.handle;source.kind=definition.kind;
     std::uint32_t expectedRegistry{};
     std::uint16_t expectedSlot{};
+    if(adieuContext) {
+        for(const auto& row:adieu::kSources) {
+            if(row.definition==definition.handle && row.offset==definition.offset) {expectedRegistry=row.asset.registry;expectedSlot=row.asset.slot;break;}
+        }
+        if(!expectedRegistry) {source.reason=kSourceUnknownResource;return false;}
+    }
     if(homecomingContext) {
         for(const auto& row:hc::kSpawns) {
             if(row.definition==definition.handle && row.offset==definition.offset) {expectedRegistry=row.registry;expectedSlot=row.source;break;}
@@ -302,7 +311,7 @@ bool source(Read& read,std::uintptr_t instance,Source& source,bool gatewayContex
         if(expectedRegistry==0) { source.reason=kSourceUnknownResource;return false; }
     }
     for(const auto& row:catalog::kSpawners) {
-        if(!gatewayContext && !trialContext && !deepContext && !strikeContext && !hijackedContext && !gardenContext && !launchpadContext && !oneAuContext && !homecomingContext && catalog::supported_by_encounter(row) && row.resource==definition.handle) {
+        if(!gatewayContext && !trialContext && !deepContext && !strikeContext && !hijackedContext && !gardenContext && !launchpadContext && !oneAuContext && !homecomingContext && !adieuContext && catalog::supported_by_encounter(row) && row.resource==definition.handle) {
             expectedRegistry=catalog::kRegistry;expectedSlot=row.slot;break;
         }
     }
@@ -392,7 +401,7 @@ __declspec(noinline) void observe_admission(std::uint32_t parent,std::uint64_t c
         handle,actorState.handle,actorState.parent)
         || !read.resolve({actorState.parent,0,0},parentAgain) || parentAgain!=currentParent) {rejection=5;}
     else if(!read.resolve(actorState.source,linked)) {rejection=6;}
-    else if(!read.value(linked,definition) || !source(read,linked,sourceState,nav.gateway,nav.trial,nav.deep,nav.strike,nav.hijacked,nav.garden,nav.launchpad,nav.oneAu,nav.homecoming)) {rejection=7;}
+    else if(!read.value(linked,definition) || !source(read,linked,sourceState,nav.gateway,nav.trial,nav.deep,nav.strike,nav.hijacked,nav.garden,nav.launchpad,nav.oneAu,nav.homecoming,nav.adieu)) {rejection=7;}
     else if(sourceState.generation==0 || sourceState.generation!=sourceState.senseGeneration) {rejection=8;}
 
     // Retain the authentic actor/AI-parent origin before progression can detach
@@ -406,7 +415,7 @@ __declspec(noinline) void observe_admission(std::uint32_t parent,std::uint64_t c
     // deduplicates full actor IDs, and fails closed on unexpected population.
     bool accepted=false;
     if(rejection==0) {
-        accepted=nav.homecoming?hc::observe_admission({nav.run,handle,actorState.source.handle,sourceState.generation,sourceState.slot,sourceState.registry}):nav.oneAu?oneau::observe_admission({nav.run,handle,actorState.source.handle,sourceState.generation,sourceState.slot,sourceState.registry}):nav.launchpad?launchpad::observe_admission(
+        accepted=nav.adieu?adieu::observe_admission({nav.run,handle,actorState.source.handle,sourceState.generation,sourceState.slot,sourceState.registry}):nav.homecoming?hc::observe_admission({nav.run,handle,actorState.source.handle,sourceState.generation,sourceState.slot,sourceState.registry}):nav.oneAu?oneau::observe_admission({nav.run,handle,actorState.source.handle,sourceState.generation,sourceState.slot,sourceState.registry}):nav.launchpad?launchpad::observe_admission(
             {nav.run,handle,actorState.source.handle,sourceState.generation,sourceState.slot,sourceState.registry})
             :nav.garden?garden::observe_admission(
             {nav.run,handle,actorState.source.handle,sourceState.generation,sourceState.slot,sourceState.registry})
@@ -545,7 +554,7 @@ __declspec(noinline) void observe_candidate(void* instance,std::uint32_t event,
     else if(!read.resolve({at<std::uint32_t>(character.data()+0x24),0,0},characterAddress)) {rejection=4;}
     else if(characterAddress!=address) {rejection=5;}
     else if(!read.resolve(actorState.source,linked)) {rejection=6;}
-    else if(!source(read,linked,sourceState,nav.gateway,nav.trial,nav.deep,nav.strike,nav.hijacked,nav.garden,nav.launchpad,nav.oneAu,nav.homecoming)) {rejection=7;}
+    else if(!source(read,linked,sourceState,nav.gateway,nav.trial,nav.deep,nav.strike,nav.hijacked,nav.garden,nav.launchpad,nav.oneAu,nav.homecoming,nav.adieu)) {rejection=7;}
     std::array<std::byte,0x3C> eventHeader{};std::array<std::byte,0x38> payload{};
     std::uint32_t eventDefinition{};bool eventValid=false,healthValid=false,deathAccepted=false;
     Ref healthRef{};std::uintptr_t healthAddress{},memberAddress{};
@@ -571,7 +580,7 @@ __declspec(noinline) void observe_candidate(void* instance,std::uint32_t event,
         const bool qualified=omega_enemy_native_health::death(eventValid,eventDefinition,healthValid,
             healthFlags,sourceState.generation,sourceState.senseGeneration);
         if(qualified && call.accepts_side_effects()) {
-            deathAccepted=nav.homecoming?hc::observe_death({nav.run,actorState.handle,actorState.source.handle,sourceState.generation,sourceState.slot,sourceState.registry}):nav.oneAu?oneau::observe_death({nav.run,actorState.handle,actorState.source.handle,sourceState.generation,sourceState.slot,sourceState.registry}):nav.launchpad?launchpad::observe_death(
+            deathAccepted=nav.adieu?adieu::observe_death({nav.run,actorState.handle,actorState.source.handle,sourceState.generation,sourceState.slot,sourceState.registry}):nav.homecoming?hc::observe_death({nav.run,actorState.handle,actorState.source.handle,sourceState.generation,sourceState.slot,sourceState.registry}):nav.oneAu?oneau::observe_death({nav.run,actorState.handle,actorState.source.handle,sourceState.generation,sourceState.slot,sourceState.registry}):nav.launchpad?launchpad::observe_death(
             {nav.run,actorState.handle,actorState.source.handle,sourceState.generation,sourceState.slot,sourceState.registry})
             :nav.garden?garden::observe_death(
                 {nav.run,actorState.handle,actorState.source.handle,sourceState.generation,sourceState.slot,sourceState.registry})

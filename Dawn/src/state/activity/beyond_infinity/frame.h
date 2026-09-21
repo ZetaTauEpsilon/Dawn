@@ -36,12 +36,17 @@ struct SceneRequest {
     bool silent{};
     std::span<const std::uint32_t> inputs() const noexcept { return std::span(events).first(count<=events.size()?count:0); }
 };
+struct NavigationProgress {
+    bool forestPastComplete{},pastEncounter{},pastReturn{},forestFutureComplete{},futureEntered{},futureReflection{},futureReturn{};
+    friend bool operator==(const NavigationProgress&,const NavigationProgress&)=default;
+};
 struct Frame {
+    NavigationProgress navigation{};
     bool enabled{},checked{},finished{},lensDestroyed{},plateOccupied{},lensExposed{};
     std::uint8_t section{},forestPass{},transitRoute{},transitContact{},activeRow{coo::kNoDialogue};
     std::uint32_t spawnGeneration{},revision{},objective{},plateRevision{1};
     std::uint32_t forestSeed{};
-    bool forestReady{};
+    bool forestReady{},wellEntered{};
     std::array<std::uint32_t,49> generations{};
     std::array<NativeState,std::size(kAssets)> native{};
     std::array<SceneRequest,std::size(kScenes)> sceneRequests{};

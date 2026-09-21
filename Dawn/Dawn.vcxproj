@@ -146,6 +146,9 @@
     <ClCompile Include="src\state\activity\vanilla\one_au\runtime.cpp"><ExceptionHandling>Sync</ExceptionHandling><ObjectFileName>$(IntDir)one_au_runtime.obj</ObjectFileName></ClCompile>
     <ClCompile Include="src\state\activity\vanilla\one_au\native_observer.cpp"><ExceptionHandling>Sync</ExceptionHandling><ObjectFileName>$(IntDir)one_au_native_observer.obj</ObjectFileName></ClCompile>
     <ClCompile Include="src\state\activity\vanilla\homecoming\mission.cpp"><ExceptionHandling>Sync</ExceptionHandling><ObjectFileName>$(IntDir)homecoming_mission.obj</ObjectFileName></ClCompile>
+    <ClCompile Include="src\state\activity\vanilla\adieu\controller.cpp"><ExceptionHandling>Sync</ExceptionHandling><ObjectFileName>$(IntDir)adieu_controller.obj</ObjectFileName></ClCompile>
+    <ClCompile Include="src\state\activity\vanilla\adieu\runtime.cpp"><ExceptionHandling>Sync</ExceptionHandling><ObjectFileName>$(IntDir)adieu_runtime.obj</ObjectFileName></ClCompile>
+    <ClCompile Include="src\state\activity\vanilla\adieu\native_observer.cpp"><ExceptionHandling>Sync</ExceptionHandling><ObjectFileName>$(IntDir)adieu_native_observer.obj</ObjectFileName></ClCompile>
     <ClCompile Include="src\state\activity\vanilla\homecoming\controller.cpp"><ExceptionHandling>Sync</ExceptionHandling><ObjectFileName>$(IntDir)homecoming_controller.obj</ObjectFileName></ClCompile>
     <ClCompile Include="src\state\activity\vanilla\homecoming\runtime.cpp"><ExceptionHandling>Sync</ExceptionHandling><ObjectFileName>$(IntDir)homecoming_runtime.obj</ObjectFileName></ClCompile>
     <ClCompile Include="src\state\activity\vanilla\homecoming\native_observer.cpp"><ExceptionHandling>Sync</ExceptionHandling><ObjectFileName>$(IntDir)homecoming_native_observer.obj</ObjectFileName></ClCompile>
@@ -1619,6 +1622,7 @@
     <None Include="scripts\hijacked.lua" />
     <None Include="scripts\one_au.lua" />
     <None Include="scripts\homecoming.lua" />
+    <None Include="scripts\adieu.lua" />
     <ClInclude Include="src\state\activity\vanilla\homecoming\native_catalog.h" />
     <ClInclude Include="src\state\activity\vanilla\homecoming\registries.h" />
     <ClInclude Include="src\state\activity\vanilla\homecoming\selection.h" />
@@ -1631,6 +1635,7 @@
     <ClInclude Include="src\state\activity\vanilla\homecoming\transit.h" />
     <ClInclude Include="src\state\activity\vanilla\homecoming\music.h" />
     <ClInclude Include="src\state\activity\vanilla\homecoming\mission.h" />
+    <ClInclude Include="src\state\activity\vanilla\homecoming\scene_actions.h" />
     <ClInclude Include="src\state\activity\vanilla\homecoming\controller.h" />
     <ClInclude Include="src\state\activity\vanilla\homecoming\entry.h" />
     <ClInclude Include="src\state\activity\vanilla\homecoming\authority.h" />

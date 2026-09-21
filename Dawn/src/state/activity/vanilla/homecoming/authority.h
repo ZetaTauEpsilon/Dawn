@@ -44,7 +44,7 @@ inline std::size_t body_bits(const Frame& f,std::uint32_t key,std::uint8_t type,
     if(a->asset==kDirectiveAsset && f.presentation.published) {return native_presentation::kDirectiveBits;}
     if(a->asset==kConsoleLink) {return 65;}
     if(type==3 && a->authority==0x80807F0CU) {return 225;}
-    if(type==1) {const auto i=spawn_index(a->asset);if(i<kSpawns.size() && kSpawns[i].sceneOwned) {return 641;}}
+    if(type==1) {const auto i=spawn_index(a->asset);if(i<kSpawns.size() && kSpawns[i].sceneOwned) {return coo::native_combatant::authored_source_bits(kSpawns[i].categories,tactical(kSpawns[i]).registry!=0);}}
     const auto& s=f.native[asset_index(a->asset)];if(!s.managed) {return 0;}
     if(type==1) {const auto i=spawn_index(a->asset);return i<kSpawns.size()?native_combatant::source_bits(kSpawns[i].categories):0;}
     if(type==2) {return coo::native_combatant::kBindBits;}
@@ -63,7 +63,15 @@ template<class Writer> bool write_body(Writer& w,const Frame& f,std::uint32_t ke
     const auto a=find(key,type,slot)->asset;
     if(a==music::kSensor) {return music::write(w,f);}
     if(a==kDialogueAsset) {return native_presentation::dialogue(w,f.generations,f.activeRow);}
-    if(a==kDirectiveAsset) {return native_presentation::objective(w,f.presentation,nullptr,true);}
+    if(a==kDirectiveAsset) {
+        const auto progress=f.presentation.event==kObjectives[7]?f.assaultsRepelled:
+            f.presentation.event==kObjectives[11]?std::count(f.generatorDown.begin(),f.generatorDown.end(),true):0;
+        const bool counted=f.presentation.event==kObjectives[7] || f.presentation.event==kObjectives[11];
+        // 80B508FE/F0D48F30 value 0 is description-only; value 1 carries
+        // "Exhaust turbines destroyed" and the native counter flag.
+        const auto variant=f.presentation.event==kObjectives[11]?1U:0U;
+        return native_presentation::objective(w,f.presentation,nullptr,true,static_cast<std::uint32_t>(progress),counted?3U:0U,variant);
+    }
     if(a==asset(kRuntime,35,1)) {
         // 808099C4 shared director: Darkness Zone presentation only; no wipe countdown.
         return w.write(f.restricted?1U:0U,1) && w.write(0,1) && w.write(1,2) && w.write(0,2)
@@ -80,10 +88,23 @@ template<class Writer> bool write_body(Writer& w,const Frame& f,std::uint32_t ke
     }
     if(type==1) {
         const auto& p=kSpawns[spawn_index(a)];
-        if(p.sceneOwned) {return coo::native_scene::write_source(w,s.generation?s.generation:f.spawnGeneration,s.active && !s.sourceCleared);}
         const bool live=s.active && !s.sourceCleared;
         auto task=tactical(p);
         if(task.registry && f.tactics[spawn_index(a)].revision==s.generation) {task.row=f.tactics[spawn_index(a)].group;}
+        if(p.sceneOwned) {
+            const auto counts=live?requests(p):std::array<std::uint8_t,4>{};
+            coo::native_combatant::Source source{};
+            source.registry=key;source.generation=s.generation?s.generation:f.spawnGeneration;
+            source.categories=std::span(counts).first(p.categories);source.hasRule=false;
+            // Scene/named-member creation is the sole actor owner. Ordinary
+            // replacement mode also creates a loose actor (observed for the
+            // Centurion source 20 + member 21), overflowing the kill ledger.
+            // Native flag-removal actions change the existing actor, NOT this
+            // population mode; never turn their receipt into a second spawn.
+            source.sceneRequested=true;
+            source.tactical=task;if(task.registry) {source.tactical.revision=source.generation;}
+            return coo::native_combatant::write_authored_source(w,source,{0,0,0,0});
+        }
         const auto* override=rule_override(p);
         native_combatant::Source source{};
         source.registry=key;source.generation=s.generation;source.ruleSlot=override?override->rule:p.rule;
@@ -106,10 +127,10 @@ template<class Writer> bool write_body(Writer& w,const Frame& f,std::uint32_t ke
     }
     if(type==4) {return s.prepared && use_subscription(a)?interactable(w,s.generation,s.active):coo::native_device::object(w,s.generation,s.active);}
     if(type==23) {return device_authority(w,s.position,s.power,s.lock,s.generation,s.snap);}
-    if(type==43 && !s.active) {return coo::native_scene::cast_scene(w,0,{});}
+    if(type==43 && !s.active) {return coo::native_scene::cast_scene(w,s.generation,{}, {},f.scenes[scene_index(a)].revision,true);}
     if(type==43) {
         const auto i=scene_index(a);if(i>=std::size(kScenes)) {return false;}
-        return coo::native_scene::cast_scene(w,s.generation,scene_sources(kScenes[i]).span(),std::span(f.scenes[i].events).first(f.scenes[i].count));
+        return coo::native_scene::cast_scene(w,s.generation,scene_sources(kScenes[i]).span(),std::span(f.scenes[i].events).first(f.scenes[i].count),f.scenes[i].revision);
     }
     return false;
 }

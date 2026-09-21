@@ -285,11 +285,10 @@ void draw() noexcept {
     if (ImGui::BeginChild("##campaign_missions", {0, height}, ImGuiChildFlags_None)) {
         if (g_resetScroll) { ImGui::SetScrollY(0); g_resetScroll = false; }
         const auto status = launch::snapshot();
-        unsigned ordinal{};
-        for (std::size_t i = 0; i < openings::kMissions.size(); ++i) {
+        for (const auto i : openings::kDisplayOrder) {
             if (!openings::listed(openings::kMissions[i])
                 || openings::kMissions[i].campaign != selected_group()) { continue; }
-            if (mission_row(i, ++ordinal, status)) {
+            if (mission_row(i, openings::mission_number(i), status)) {
                 (void)launch::request_variant(i, selected_difficulty(), selected_modifiers());
             }
         }

@@ -8,6 +8,8 @@ namespace adapter=dawn::client::hooks::bootflow::one_au_entrance;
 namespace native=m::entrance_native;
 inline m::EntranceRequest wanted{};
 inline unsigned requests{},nativeCalls{},expectedRequests{};
+inline bool barrierPending{};
+inline std::uint8_t originalResult=0xA5;
 inline std::byte* expectedDevice{};
 inline const void* expectedContext{};
 inline std::array<char,1024> probe{};
@@ -16,7 +18,7 @@ inline std::uint8_t __fastcall original(std::byte* device,const void* context) {
     check(device==expectedDevice && context==expectedContext,"actual device hook preserves both native arguments");
     check(requests==expectedRequests,"entrance observer runs before the native device callback");
     check(hook::callGate.active_calls()==1,"repair and native forwarding share the existing hook lifetime");
-    return 0xA5;
+    return originalResult;
 }
 template<class T> void put(std::byte* bytes,std::size_t offset,const T& value) {
     std::memcpy(bytes+offset,&value,sizeof value);
@@ -53,6 +55,16 @@ inline void run() {
     check(hook::tick(device.data(),&context)==0xA5 && requests==2 && nativeCalls==3,
         "other missions retain native callback behavior");
     check(std::strstr(probe.data(),"status=inactive")!=nullptr,"inactive mission reports a diagnostic without scanning");
+    originalResult=0;barrierPending=true;expectedRequests=3;
+    check(hook::tick(device.data(),&context)==1 && nativeCalls==4,
+        "production shared hook keeps an idle barrier callback alive while release is pending");
+    barrierPending=false;expectedRequests=4;
+    check(hook::tick(device.data(),&context)==0 && nativeCalls==5,
+        "production hook retires a completed barrier with the original idle result");
+    hook::callGate.quiesce();barrierPending=true;
+    check(hook::tick(device.data(),&context)==0 && nativeCalls==6 && requests==4,
+        "quiescing cannot retain native callbacks for a pending barrier");
+    barrierPending=false;originalResult=0xA5;
     hook::callGate.quiesce();hook::tickOriginal.store(nullptr);hook::image=0;
     check(VirtualFree(rows,0,MEM_RELEASE)!=0 && VirtualFree(image,0,MEM_RELEASE)!=0,"release synthetic allocations");
 }
@@ -65,6 +77,7 @@ EntranceRequest entrance_request() noexcept {
 namespace dawn::state::activity::vanilla::homecoming {
 // The shared device tick also runs the Homecoming repair; it stays inactive here.
 EntranceRequest entrance_request() noexcept { return {}; }
+bool update_ship_barrier(void*) noexcept {return entrance_callback_test::barrierPending;}
 }
 namespace dawn::core::log {
 void write(Channel,Level,std::string_view) noexcept {}

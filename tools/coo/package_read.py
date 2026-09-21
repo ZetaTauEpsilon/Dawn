@@ -4,12 +4,13 @@ Key material is borrowed from the pinned mapped image, never printed or saved.
 """
 from pathlib import Path
 from functools import lru_cache
+import os
 import ctypes as C
 import re
 import struct as S
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(os.environ.get('DAWN_GAME_ROOT', Path(__file__).resolve().parents[2])).resolve()
 OUT = ROOT / 'build/coo/native-tags'
 u32 = lambda b, o: S.unpack_from('<I', b, o)[0]
 u64 = lambda b, o: S.unpack_from('<Q', b, o)[0]

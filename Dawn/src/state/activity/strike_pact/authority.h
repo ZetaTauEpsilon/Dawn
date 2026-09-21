@@ -168,7 +168,7 @@ bool write_body(Writer& writer,const Frame& frame,std::uint32_t key,std::uint8_t
         if(type==53) { return coo::native_presentation::dialogue(writer,frame.generations,frame.activeRow); }
         const auto* region=presentation::region(frame.region);
         const coo::Asset audience=region?coo::Asset{region->registry,region->tag,70,region->audience}:coo::Asset{};
-        return coo::native_presentation::objective(writer,frame.presentation,audience,true);
+        return coo::native_presentation::waypoint_objective(writer,frame.presentation,audience,true);
     }
     if(type==1) {
         const auto index=all_spawn_index(key,slot);

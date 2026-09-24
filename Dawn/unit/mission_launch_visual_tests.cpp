@@ -96,6 +96,7 @@ namespace dawn::core::ui::layout::credits { void request_open() noexcept {} }
 namespace dawn::core::log { void write(Channel, Level, std::string_view) noexcept {} }
 namespace dawn::client::ui::movement { void draw() noexcept { dummy_page(); } }
 namespace dawn::client::ui::player { void draw() noexcept { dummy_page(); } }
+namespace dawn::client::ui::camera { void draw() noexcept { dummy_page(); } }
 namespace dawn::state::build_data {
 bool scenario_layouts_ready() noexcept { return !g_missingContent; }
 bool spawn_sets_ready() noexcept { return !g_missingContent && g_spawnPublished; }
@@ -187,8 +188,11 @@ int main(int argc, char** argv) {
     ui::theme::apply();
     check(client::ui::runtime::initialize(), "production client navigation");
     const auto registered = ui::modules::registry::snapshot();
-    check(registered.entries().size() == 3 && registered.entries().front().stable_id() == "client.mission_launch",
+    check(registered.entries().size() == 4 && registered.entries().front().stable_id() == "client.mission_launch",
         "campaigns are the default and Forest is not registered");
+    check(std::any_of(registered.entries().begin(), registered.entries().end(), [](const auto& item) {
+        return item.stable_id() == "client.camera" && item.display_name() == "Camera";
+    }), "camera page registered alongside campaigns");
     for (const auto& item : registered.entries()) { check(item.display_name() != "Forest", "Forest tab removed"); }
     ui::modules::registry::PageRegistration activity, hud, logs;
     check(activity.acquire(ui::modules::Owner::server, "server.activity", "Activity", dummy_page), "activity page");
@@ -200,7 +204,7 @@ int main(int argc, char** argv) {
     check(std::all_of(panel::g_ready.begin(), panel::g_ready.end(), [](bool ready) { return ready; }), "all curated openings available");
     screenshot(screens / "dawn-osiris.ppm");
     for (std::size_t i = 0; i < openings::kMissions.size(); ++i) {
-        if (openings::kMissions[i].campaign == 0) continue;
+        if (!openings::listed(openings::kMissions[i])) continue;
         panel::g_campaign = openings::kMissions[i].campaign; g_launchState = {};
         frame(); frame();
         auto* window = mission_window();
@@ -247,15 +251,23 @@ int main(int argc, char** argv) {
         "waiting for hooks is distinct from native launch");
     g_launchState = {}; panel::g_campaign = 0; panel::g_resetScroll = true;
     frame(); frame();
-    const auto hiddenHomecomingRequests = g_requests;
+    screenshot(screens / "dawn-red-war-1au.ppm");
+    const auto homecomingRequests = g_requests;
     frame(1500, 1000, row_id(0)); frame();
-    check(g_requests == hiddenHomecomingRequests, "Homecoming has no launch button");
+    check(g_requests == homecomingRequests + 1, "Homecoming launch button requests its opening");
+    g_launchState = {}; frame(); frame();
     // Exercise the actual campaign tab button with keyboard navigation activation.
     ImGuiWindow* content{};
     for (auto* window : ImGui::GetCurrentContext()->Windows) {
         if (std::strstr(window->Name, "##dawn_content") && !std::strstr(window->Name, "##campaign_missions") && window->Active) { content = window; }
     }
     check(content != nullptr, "content surface found");
+    panel::g_campaign=1;
+    frame(1500, 1000, content->GetID("Red War")); frame(); frame();
+    check(panel::g_campaign==0, "Red War tab exposes Homecoming and 1AU");
+    check(std::count_if(openings::kMissions.begin(),openings::kMissions.end(),
+        [](const auto& m) {return m.campaign==0 && openings::listed(m);})==2,
+        "Homecoming and 1AU are the listed Red War missions");
     frame(1500, 1000, content->GetID("Curse of Osiris")); frame(); frame();
     check(panel::g_campaign == 1, "Curse of Osiris tab switches campaigns");
     frame(1500, 1000, content->GetID("Strikes")); frame(); frame();
@@ -334,6 +346,6 @@ int main(int argc, char** argv) {
     check(g_gpu->Release() == 0, "GPU resources released");
     const auto stats = ui::memory::snapshot();
     check(stats.outstandingAllocations == 0 && ui::memory::shutdown(), "fixed arena released");
-    std::cout << "PASS: Dawn production layout, " << openings::kMissions.size() - 1 << " launch buttons, Homecoming hidden, preparing/in-mission/wrong-destination/busy/unavailable states, campaign/Strikes/Nightfalls tabs, DPI and close/reopen; zero ImGui errors; "
+    std::cout << "PASS: Dawn production layout, " << openings::kMissions.size() << " launch buttons, preparing/in-mission/wrong-destination/busy/unavailable states, campaign/Strikes/Nightfalls tabs, DPI and close/reopen; zero ImGui errors; "
         << stats.highWaterBytes << "/" << stats.capacityBytes << " arena high water\n";
 }

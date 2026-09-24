@@ -120,11 +120,12 @@ Frame snapshot(std::uint64_t run,std::uint64_t now,bool ready) noexcept {
 }
 Request request() noexcept {const std::lock_guard lock(mutex);return current()?Request{controller.owner(),controller.frame()}:Request{};}
 std::uint64_t native_run() noexcept {const std::lock_guard lock(mutex);return current()?selectedRun:0;}
-void observe_objective_readiness(coo::Generation owner,std::uint32_t handle,std::uintptr_t component,std::uintptr_t content,bool ready) noexcept {
+void observe_objective_readiness(coo::Generation owner,std::uint32_t handle,std::uintptr_t component,std::uintptr_t content,bool ready,std::uint32_t logicalRevision,std::uint32_t visibleRow) noexcept {
     const std::lock_guard lock(mutex);
     if(!current() || owner!=controller.owner() || !controller.frame().enabled)return;
     objectiveDelivery.select(owner);
     if(objectiveDelivery.observe(owner,handle,component,content,ready)) {nextPublication=0;}
+    if(logicalRevision==controller.frame().presentation.revision)objectiveDelivery.acknowledge(owner,logicalRevision,visibleRow);
 }
 bool publication_due(std::uint64_t now) noexcept {const std::lock_guard lock(mutex);return current() && controller.frame().enabled && now>=nextPublication;}
 void observe_position(float x,float y,float z) noexcept {

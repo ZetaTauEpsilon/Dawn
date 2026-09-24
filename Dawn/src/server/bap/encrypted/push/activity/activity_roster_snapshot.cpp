@@ -1,6 +1,19 @@
 #include "../../../../../state/activity/coo/native_mission_forest_authority.h"
+#include "../../../../../state/activity/coo/waypoint_delivery.h"
 #include "../../../../../state/activity/vendors/lifetime.h"
 #include "../../../../../state/activity/Newlight/launchpad/transit.h"
+#include "../../../../../state/activity/vanilla/one_au/transit.h"
+#include "../../../../../state/activity/vanilla/one_au/runtime.h"
+#include "vanilla/one_au_roster.h"
+#include "../../../../../state/activity/vanilla/one_au/selection.h"
+#include "../../../../../state/activity/vanilla/homecoming/transit.h"
+#include "../../../../../state/activity/vanilla/homecoming/runtime.h"
+#include "../../../../../state/activity/vanilla/homecoming/continuation.h"
+#include "vanilla/homecoming_roster.h"
+#include "vanilla/adieu_roster.h"
+#include "../../../../../state/activity/vanilla/adieu/transit.h"
+#include "../../../../../state/activity/vanilla/homecoming/selection.h"
+#include "../../../../../state/activity/vanilla/homecoming/prologue.h"
 #include <Windows.h>
 #include "../../../../../client/player/player_position.h"
 
@@ -317,6 +330,30 @@ void expose_group(const layouts::RosterGroup& group, message::Group& output) noe
     output.slotIndices = std::span<const std::uint16_t>(group.slotIndices.data(), group.slotCount);
 }
 
+// Release 466E60 + 44E390..44EE10: bind delivery to the actual admitted
+// descriptor, not a hard-coded campaign/strike alias or a stale roster pointer.
+template<class Frame>
+void project_waypoint_delivery(const Scratch& scratch,const message::Roster& roster,
+                              std::uint32_t key,Frame& frame) noexcept {
+    if(!frame.enabled || !frame.presentation.published)return;
+    std::uint32_t definition{};
+    if(roster.groupCount>roster.groups.size()) {frame.presentation.published=false;return;}
+    for(std::size_t i=0;i<roster.groupCount;++i) {
+        const auto& published=roster.groups[i];if(published.key!=key)continue;
+        for(const auto& group:scratch.rosterGroups) {
+            if(group.registryKey!=key || published.slotTypes.data()!=group.slotTypes.data()
+                || published.slotTypes.size()!=group.slotCount || group.slotCount>group.slotTypes.size())continue;
+            for(std::size_t j=0;j<group.slotCount;++j)if(group.slotTypes[j]==68 && group.slotIndices[j]==0) {
+                if(definition || group.descriptorOffsets[j]!=0xB88 || group.componentClasses[j]!=0x80804F53
+                    || group.authSchemas[j]!=0x80804F67) {frame.presentation.published=false;return;}
+                definition=group.descriptorTags[j];
+            }
+        }
+    }
+    frame.presentation=state::activity::coo::waypoint_delivery::project(
+        {{state::activity::mission_run_generation(),frame.spawnGeneration},definition},frame.presentation);
+}
+
 // The state-121 shells share these existing global keys. Only the native
 // bookend has a new network descriptor; its type61 companion has none.
 bool terminal_roster(Scratch& scratch,message::Roster& roster) noexcept {
@@ -441,7 +478,10 @@ enum class OrdinaryCoverage : std::uint8_t { absent, active, inactiveBubble };
 
     namespace tables = middleware::content::packages::tables;
     std::size_t selectedSlice = layouts::kBubbleCapacity;
-    if (region >= 0 && region % static_cast<std::int32_t>(tables::kSliceSetIndexFactor) == 0) {
+    if (region >= 0 && (region % static_cast<std::int32_t>(tables::kSliceSetIndexFactor) == 0
+        || layout.tag==state::activity::vanilla::one_au::kScenario
+        || layout.tag==state::activity::vanilla::homecoming::kScenario
+        || layout.tag==state::activity::vanilla::adieu::kScenario)) {
         const std::size_t ordinal =
             static_cast<std::size_t>(region) / tables::kSliceSetIndexFactor;
         if (ordinal < layouts::kBubbleCapacity) {
@@ -711,6 +751,15 @@ RosterOutcome build_roster_snapshot(Session& session,
     const bool beyondDestination=name=="adventure_vod" && !session.activity.joinedForeignSession;
     const bool beyondPrepared=state::activity::beyond_infinity::prepare(state::activity::mission_run_generation(),beyondDestination);
     if(beyondDestination && !beyondPrepared) { return RosterOutcome::noGroups; }
+    const bool oneAuDestination=name=="mission_ember" && !session.activity.joinedForeignSession;
+    const bool oneAuPrepared=state::activity::vanilla::one_au::prepare(state::activity::mission_run_generation(),oneAuDestination);
+    if(oneAuDestination && !oneAuPrepared) {return RosterOutcome::noGroups;}
+    const bool homecomingDestination=name=="mission_towerfall" && !session.activity.joinedForeignSession;
+    const bool homecomingPrepared=state::activity::vanilla::homecoming::prepare(state::activity::mission_run_generation(),homecomingDestination);
+    if(homecomingDestination && !homecomingPrepared) {return RosterOutcome::noGroups;}
+    const bool adieuDestination=name=="mission_journey" && !session.activity.joinedForeignSession;
+    const bool adieuPrepared=state::activity::vanilla::adieu::prepare(state::activity::mission_run_generation(),adieuDestination);
+    if(adieuDestination && !adieuPrepared) return RosterOutcome::noGroups;
     const bool deepDestination=name=="adventure_whisk" && !session.activity.joinedForeignSession;
     const bool deepPrepared=state::activity::deep_storage::prepare(state::activity::mission_run_generation(),deepDestination);
     if(deepDestination && !deepPrepared) { return RosterOutcome::noGroups; }
@@ -841,6 +890,13 @@ RosterOutcome build_roster_snapshot(Session& session,
     if(beyondPrepared && !beyond_infinity_roster::prepare_layout(layout,
         [](std::uint32_t key,std::uint32_t tag,std::uint16_t& index) noexcept { return layouts::find_group_index(key,tag,index); },
         [](std::size_t index,layouts::RosterGroup& group) noexcept { return state::build_data::find_roster_group(index,group); })) { return RosterOutcome::noGroups; }
+    if(oneAuPrepared && !one_au_roster::prepare_layout(layout,
+        [](std::size_t index,layouts::RosterGroup& group) noexcept {return state::build_data::find_roster_group(index,group);})) {return RosterOutcome::noGroups;}
+    if(homecomingPrepared && !homecoming_roster::prepare_layout(layout,
+        [](std::uint32_t key,std::uint32_t tag,std::uint16_t& index) noexcept {return layouts::find_group_index(key,tag,index);},
+        [](std::size_t index,layouts::RosterGroup& group) noexcept {return state::build_data::find_roster_group(index,group);})) {return RosterOutcome::noGroups;}
+    if(adieuPrepared && !adieu_roster::prepare_layout(layout,
+        [](std::size_t index,layouts::RosterGroup& group) noexcept {return state::build_data::find_roster_group(index,group);})) {return RosterOutcome::noGroups;}
     if(deepPrepared && !deep_storage_roster::prepare_layout(layout,
         [](std::uint32_t key,std::uint32_t tag,std::uint16_t& index) noexcept { return layouts::find_group_index(key,tag,index); },
         [](std::size_t index,layouts::RosterGroup& group) noexcept { return state::build_data::find_roster_group(index,group); })) { return RosterOutcome::noGroups; }
@@ -942,8 +998,8 @@ RosterOutcome build_roster_snapshot(Session& session,
             ==native_publisher::Role::invalid) {return RosterOutcome::noGroups;}
     if (name == "mission_scot") {
         const auto admission = omega_lair::admit(layout, scratch, snapshot.roster,
-            [](std::size_t index, layouts::RosterGroup& group) noexcept {
-                return state::build_data::find_roster_group(index, group);
+            [](std::uint32_t key, std::uint32_t tag, layouts::RosterGroup& group) noexcept {
+                return state::build_data::find_roster_group_by_key(key, tag, group);
             });
         static std::atomic_int lastAdmission{-1};
         if (lastAdmission.exchange(static_cast<int>(admission)) != static_cast<int>(admission)) {
@@ -962,8 +1018,8 @@ RosterOutcome build_roster_snapshot(Session& session,
     }
     if (name == "mission_scot") {
         const auto admission = omega_lair::admit(layout, scratch, snapshot.roster,
-            [](std::size_t index, layouts::RosterGroup& group) noexcept {
-                return state::build_data::find_roster_group(index, group);
+            [](std::uint32_t key, std::uint32_t tag, layouts::RosterGroup& group) noexcept {
+                return state::build_data::find_roster_group_by_key(key, tag, group);
             }, true);
         static std::atomic_int lastBossAdmission{-1};
         if (lastBossAdmission.exchange(static_cast<int>(admission)) != static_cast<int>(admission)) {
@@ -979,8 +1035,8 @@ RosterOutcome build_roster_snapshot(Session& session,
     }
     if (name == "mission_scot") {
         const auto admission = omega_lair::admit_crown(layout, scratch, snapshot.roster,
-            [](std::size_t index, layouts::RosterGroup& group) noexcept {
-                return state::build_data::find_roster_group(index, group);
+            [](std::uint32_t key, std::uint32_t tag, layouts::RosterGroup& group) noexcept {
+                return state::build_data::find_roster_group_by_key(key, tag, group);
             });
         static std::atomic_int lastCrownAdmission{-1};
         if (lastCrownAdmission.exchange(static_cast<int>(admission)) != static_cast<int>(admission)) {
@@ -997,8 +1053,8 @@ RosterOutcome build_roster_snapshot(Session& session,
     if(name=="mission_scot") {
         for(const auto& group:state::activity::omega_lair_full_roster::kCombatGroups) {
             const auto admission=omega_lair::admit_full(layout,scratch,snapshot.roster,
-                [](std::size_t index,layouts::RosterGroup& row) noexcept {
-                    return state::build_data::find_roster_group(index,row);
+                [](std::uint32_t key,std::uint32_t tag,layouts::RosterGroup& row) noexcept {
+                    return state::build_data::find_roster_group_by_key(key,tag,row);
                 },group);
             if(admission!=omega_lair::Admission::added && admission!=omega_lair::Admission::present) {
                 return RosterOutcome::noGroups;
@@ -1071,6 +1127,39 @@ RosterOutcome build_roster_snapshot(Session& session,
             snapshot.missionCompletion=snapshot.beyond_infinity.completion;
             snapshot.gameplayClockTicks=snapshot.beyond_infinity.gameplayClockTicks;
         }
+    }
+    if(oneAuPrepared) {
+        std::uint32_t failedKey{};
+        if(!one_au_roster::admit(layout,scratch,snapshot.roster,
+            [](std::size_t index,layouts::RosterGroup& group) noexcept {return state::build_data::find_roster_group(index,group);},&failedKey)) {
+            std::array<char,160> line{};std::snprintf(line.data(),line.size(),"ev=one_au stage=roster result=failed registry=%08X",failedKey);
+            core::log::write(core::log::Channel::server,core::log::Level::error,line.data());return RosterOutcome::noGroups;
+        }
+        snapshot.one_au=state::activity::vanilla::one_au::snapshot(state::activity::mission_run_generation(),GetTickCount64(),state::activity::mission_seed_armed());
+        if(snapshot.one_au.enabled) {snapshot.missionCompletion=snapshot.one_au.completion;snapshot.gameplayClockTicks=snapshot.one_au.gameplayClockTicks;}
+        if(!one_au_roster::movies(scratch,snapshot.roster,snapshot.one_au.cinematic.owner.valid()?snapshot.one_au.cinematic:state::activity::vanilla::one_au::request().frame.cinematic)) {return RosterOutcome::noGroups;}
+    }
+    if(homecomingPrepared) {
+        std::uint32_t failedKey{};
+        if(!homecoming_roster::admit(layout,scratch,snapshot.roster,
+            [](std::uint32_t key,std::uint32_t tag,layouts::RosterGroup& group) noexcept {return state::build_data::find_roster_group_by_key(key,tag,group);},&failedKey)) {
+            std::array<char,160> line{};std::snprintf(line.data(),line.size(),"ev=homecoming stage=roster result=failed registry=%08X",failedKey);
+            core::log::write(core::log::Channel::server,core::log::Level::error,line.data());return RosterOutcome::noGroups;
+        }
+        snapshot.homecoming=state::activity::vanilla::homecoming::snapshot(state::activity::mission_run_generation(),GetTickCount64(),state::activity::mission_seed_armed());
+        if(snapshot.homecoming.enabled) {snapshot.missionCompletion=snapshot.homecoming.completion;snapshot.gameplayClockTicks=snapshot.homecoming.gameplayClockTicks;}
+        if(!homecoming_roster::movies(scratch,snapshot.roster,snapshot.homecoming.cinematic.owner.valid()?snapshot.homecoming.cinematic:state::activity::vanilla::homecoming::request().frame.cinematic)) {return RosterOutcome::noGroups;}
+    }
+    if(adieuPrepared) {
+        std::uint32_t failedKey{};
+        if(!adieu_roster::admit(layout,scratch,snapshot.roster,
+            [](std::uint32_t key,std::uint32_t tag,layouts::RosterGroup& group) noexcept {return state::build_data::find_roster_group_by_key(key,tag,group);},&failedKey)) {
+            std::array<char,160> line{};std::snprintf(line.data(),line.size(),"ev=adieu stage=roster result=failed registry=%08X",failedKey);
+            core::log::write(core::log::Channel::server,core::log::Level::error,line.data());return RosterOutcome::noGroups;
+        }
+        snapshot.adieu=state::activity::vanilla::adieu::snapshot(state::activity::mission_run_generation(),GetTickCount64(),state::activity::mission_seed_armed());
+        if(snapshot.adieu.enabled) {snapshot.missionCompletion=snapshot.adieu.completion;snapshot.gameplayClockTicks=snapshot.adieu.gameplayClockTicks;}
+        if(!adieu_roster::movies(scratch,snapshot.roster,snapshot.adieu.cinematic.owner.valid()?snapshot.adieu.cinematic:state::activity::vanilla::adieu::request().frame.cinematic)) {return RosterOutcome::noGroups;}
     }
     if(deepPrepared) {
         std::uint32_t failedKey{};
@@ -1247,6 +1336,8 @@ RosterOutcome build_roster_snapshot(Session& session,
         intro::selected(state::activity::mission_run_generation(),selection.activityIndex,layout.tag,GetTickCount64());
         snapshot.gatewayIntro=intro::frame(state::activity::mission_run_generation());
         if(snapshot.gatewayIntro.enabled && !launchpad_roster::gateway(scratch,snapshot.roster)) {return RosterOutcome::noGroups;}
+        namespace prologue=state::activity::vanilla::homecoming::prologue;
+        prologue::selected(state::activity::mission_run_generation(),selection.activityIndex,layout.tag,GetTickCount64());
     }
     if(launchpadPrepared) {
         std::uint32_t failedKey{};
@@ -1276,6 +1367,12 @@ RosterOutcome build_roster_snapshot(Session& session,
             snapshot.gameplayClockTicks=snapshot.hijacked.gameplayClockTicks;
         }
     }
+    project_waypoint_delivery(scratch,snapshot.roster,state::activity::gateway::kRoot,snapshot.gateway);
+    project_waypoint_delivery(scratch,snapshot.roster,state::activity::beyond_infinity::kRoot,snapshot.beyond_infinity);
+    project_waypoint_delivery(scratch,snapshot.roster,state::activity::deep_storage::kRoot,snapshot.deep_storage);
+    project_waypoint_delivery(scratch,snapshot.roster,state::activity::newlight::launchpad::kRoot,snapshot.launchpad);
+    project_waypoint_delivery(scratch,snapshot.roster,snapshot.strike_bond.campaign?0x277205FBU:state::activity::strike_bond::kRoot,snapshot.strike_bond);
+    project_waypoint_delivery(scratch,snapshot.roster,snapshot.strike_pact.campaign?0x0F0A7E94U:state::activity::strike_pact::kRoot,snapshot.strike_pact);
     const auto* nativeProfile =
         (name == "city_tower_social_d2"
          && state::activity::events::withheld(0x7C6DE64FU))
@@ -1498,6 +1595,8 @@ RosterOutcome build_roster_snapshot(Session& session,
         }
         if (snapshot.nightfallFailed) snapshot.missionCompletion = {};
     }
+    if(snapshot.one_au.cinematic.phase==state::activity::vanilla::one_au::cinematics::Phase::complete) {snapshot.lifetime=8;}
+    snapshot.lifetime=state::activity::vanilla::homecoming::continuation::lifetime(snapshot.homecoming,snapshot.lifetime);
     snapshot.keyOnEveryParticipationSlot = defaults.rosterKeyOnAllSlots;
     // The participation record's `+0` latches only when the region index is known.
     snapshot.region = static_cast<std::uint32_t>(inputs.regionIndex);
@@ -1538,6 +1637,12 @@ RosterOutcome build_roster_snapshot(Session& session,
     snapshot.spawnSliceSet = inputs.destinationArrival;
     snapshot.spawnSetHash =
         state::activity::destination::attachable_spawn_set_hash(selection, fallback.spawnSetHash);
+    if(snapshot.one_au.enabled && inputs.regionIndex>=0 && (inputs.regionIndex>>3)==snapshot.one_au.bubble) {
+        const auto cp=snapshot.one_au.recovery.point;
+        if(cp.bubble==snapshot.one_au.bubble && (snapshot.one_au.recovery.active() || snapshot.one_au.recovery.reset)) {
+            snapshot.spawnSliceSet=static_cast<std::uint32_t>(inputs.regionIndex);snapshot.spawnSetHash=cp.spawn;
+        }
+    }
     snapshot.hasSpawnOverride =
         snapshot.spawnSetHash != 0 && snapshot.spawnSetHash != message::kAbsentSpawnSetHash;
     // A membership teleport can change the spawn within the same slice set.
@@ -1754,7 +1859,8 @@ RosterOutcome build_roster_snapshot(Session& session,
     // Tower Watch uses the same root-cue/runtime transport as Omega, but the progression itself
     // is a compact manifest. Publish exactly one undelivered beat at a time so startup edges that
     // arrive in one frame cannot skip the opening objective and Ghost line.
-    const bool towerWatchEligible = name == tower_watch::kPackage
+    // The native Homecoming module replaces the compact Tower Watch manifest when it is prepared.
+    const bool towerWatchEligible = name == tower_watch::kPackage && !homecomingPrepared
                                     && session.activity.sensorObservation.towerWatchRosterReady
                                     && state::activity::world_phase()
                                            == state::activity::WorldPhase::arrived
@@ -1981,7 +2087,7 @@ namespace {
 
 /** Maps one copied membership after-image into the fixed wire schema. */
 [[nodiscard]] bool make_membership_wire(
-    state::activity::ActivityInstanceKey activity,bool validatedOmega,bool validatedBeyond,bool validatedGarden,bool validatedLaunchpad,bool validatedApproach,bool validatedGatewayIntro,
+    state::activity::ActivityInstanceKey activity,bool validatedOmega,bool validatedBeyond,bool validatedGarden,bool validatedLaunchpad,bool validatedApproach,bool validatedGatewayIntro,bool validatedOneAu,bool validatedHomecoming,bool validatedAdieu,
     const state::activity::membership::MembershipState& membership,
     const gameplay::AdvertisementSnapshot& advertisement,
     membership_message::MembershipSnapshot& wire) noexcept {
@@ -2036,6 +2142,33 @@ namespace {
         terminal = {{generic.host.state, generic.host.token, generic.host.sliceSetIndex,
                      generic.host.sliceSetHash}, generic.present, generic.arrived,
                     generic.released};
+    }
+    const auto oneAu=state::activity::vanilla::one_au::transit::project(activity,
+        state::activity::mission_run_generation(),membership.identity.memberKey,validatedOneAu,nativeTransit);
+    if(oneAu.publish) {terminal=oneAu;}
+    const auto homecomingTransit=state::activity::vanilla::homecoming::transit::project(activity,
+        state::activity::mission_run_generation(),membership.identity.memberKey,validatedHomecoming,nativeTransit);
+    if(homecomingTransit.publish) {terminal=homecomingTransit;}
+    const auto adieuTransit=state::activity::vanilla::adieu::transit::project(activity,
+        state::activity::mission_run_generation(),membership.identity.memberKey,validatedAdieu,nativeTransit);
+    if(adieuTransit.publish) terminal=adieuTransit;
+    if(validatedHomecoming || validatedAdieu) {
+        const auto leg=[](const auto& v) {
+            return middleware::bap::activity_message::replicate_membership::RegionLeg{
+                v.sliceSetIndex,v.sliceSetHash,v.regionIndex,v.publicState,v.auxState,v.present};
+        };
+        wire.currentLeg=leg(membership.currentLeg);wire.pendingLeg=leg(membership.pendingLeg);
+        wire.localAmbassador=true;
+    }
+    if(validatedOneAu) {
+        const auto leg=[](const auto& v) {
+            return middleware::bap::activity_message::replicate_membership::RegionLeg{
+                v.sliceSetIndex,v.sliceSetHash,v.regionIndex,v.publicState,v.auxState,v.present};
+        };
+        wire.currentLeg=leg(membership.currentLeg);wire.pendingLeg=leg(membership.pendingLeg);
+        wire.localAmbassador=true;
+        const auto spawn=state::activity::vanilla::one_au::project_spawn({membership.spawn.state,membership.spawn.opaqueByte,membership.spawn.opaqueValue});
+        wire.spawn={spawn.state,spawn.token,spawn.value};
     }
     if(terminal.publish) {
         wire.teleport={terminal.host.state,terminal.host.token,terminal.host.sliceSetIndex,
@@ -2238,6 +2371,9 @@ namespace {
             allowArrival && name=="mission_launchpad" && hasLayout && layout.tag==state::activity::newlight::launchpad::kScenario,
             allowArrival && name=="cine_110_twr" && hasLayout && layout.tag==state::activity::newlight::launchpad::tower::kApproachScenario,
             allowArrival && name==state::activity::gateway_intro::kPackage && hasLayout && layout.tag==state::activity::gateway_intro::kScenario,
+            allowArrival && name=="mission_ember" && hasLayout && layout.tag==state::activity::vanilla::one_au::kScenario,
+            allowArrival && name=="mission_towerfall" && hasLayout && layout.tag==state::activity::vanilla::homecoming::kScenario,
+            allowArrival && name=="mission_journey" && hasLayout && layout.tag==state::activity::vanilla::adieu::kScenario,
             membershipAfter, advertisement, output.membershipWire)) {
         gameplay::group::release_host_activity_lineage(advertisementLease);
         return RegionSnapshotBuildResult::failed;
@@ -2447,11 +2583,10 @@ RegionSnapshotBuildResult build_region_debt_snapshot(
                                                               debt.regionSource,
                                                               debt.committedHostRegion,
                                                               copied)
-        || std::memcmp(&copied.sourceMembership,
-                       &debt.membershipAfter,
-                       sizeof debt.membershipAfter)
-               != 0
-        || std::memcmp(&copied.destination, &debt.destination, sizeof debt.destination) != 0) {
+        || ((state::activity::vanilla::one_au::selected(debt.destination) || state::activity::vanilla::homecoming::selected(debt.destination))
+            ? copied.sourceMembership != debt.membershipAfter || copied.destination != debt.destination
+            : std::memcmp(&copied.sourceMembership,&debt.membershipAfter,sizeof debt.membershipAfter)!=0
+                || std::memcmp(&copied.destination,&debt.destination,sizeof debt.destination)!=0)) {
         gameplay::group::release_host_activity_lineage(boundLineageLease);
         return RegionSnapshotBuildResult::stale;
     }

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Release|x64"><Configuration>Release</Configuration><Platform>x64</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64"><Configuration>Debug</Configuration><Platform>x64</Platform></ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals"><VCProjectVersion>17.0</VCProjectVersion><ProjectGuid>{13593F91-5C06-46A8-90E3-79B2151C8F87}</ProjectGuid><WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion></PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration"><ConfigurationType>Application</ConfigurationType><PlatformToolset>v145</PlatformToolset><UseDebugLibraries Condition="'$(Configuration)'=='Release'">false</UseDebugLibraries><UseDebugLibraries Condition="'$(Configuration)'=='Debug'">true</UseDebugLibraries><CharacterSet>Unicode</CharacterSet></PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup><OutDir>$(ProjectDir)..\..\build\unit\one_au\$(Configuration)\</OutDir><IntDir>$(OutDir)obj\</IntDir></PropertyGroup>
+  <PropertyGroup>
+    <OmegaSourceRoot Condition="'$(OmegaSourceRoot)'==''">$(ProjectDir)..\src</OmegaSourceRoot>
+  </PropertyGroup>
+  <ItemDefinitionGroup><ClCompile>
+    <LanguageStandard>stdcpp20</LanguageStandard><WarningLevel>Level4</WarningLevel><TreatWarningAsError>true</TreatWarningAsError><ConformanceMode>true</ConformanceMode>
+    <RuntimeLibrary Condition="'$(Configuration)'=='Release'">MultiThreaded</RuntimeLibrary><RuntimeLibrary Condition="'$(Configuration)'=='Debug'">MultiThreadedDebug</RuntimeLibrary><Optimization Condition="'$(Configuration)'=='Debug'">Disabled</Optimization><Optimization Condition="'$(Configuration)'=='Release'">MaxSpeed</Optimization>
+    <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions><AdditionalIncludeDirectories>$(OmegaSourceRoot);$(ProjectDir)..\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    <PreprocessorDefinitions Condition="'$(OmegaVariant)'!='reference'">OMEGA_PORT_LOCAL;WIN32;_WINDOWS;NOMINMAX;WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+  </ClCompile><Link><SubSystem>Console</SubSystem><AdditionalDependencies>user32.lib;%(AdditionalDependencies)</AdditionalDependencies></Link></ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="one_au_tests.cpp"><ExceptionHandling>Sync</ExceptionHandling></ClCompile>
+    <ClCompile Include="..\src\state\activity\vanilla\one_au\controller.cpp" />
+    <ClCompile Include="..\src\state\activity\vanilla\one_au\mission.cpp" />
+
+    <ClCompile Include="..\src\state\activity\coo\mission_script.cpp"><ExceptionHandling>Sync</ExceptionHandling></ClCompile>
+    <ClCompile Include="..\src\middleware\encoding\bit_writer.cpp" />
+    <ClCompile Include="..\src\middleware\encoding\bit_reader.cpp" />
+  </ItemGroup>
+  <Import Project="..\lua-items.props" />
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

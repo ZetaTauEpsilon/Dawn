@@ -1,8 +1,11 @@
 #include <cstdint>
+#include <cstring>
 #include <iostream>
 
 #include "state/activity/membership/transactions/internal.h"
 #include "state/activity/transactions/internal.h"
+#include "state/activity/vanilla/one_au/selection.h"
+#include "server/bap/encrypted/activity_message/membership/activity_membership_route.h"
 
 namespace {
 
@@ -94,6 +97,18 @@ void authoritative_guard_includes_region_fields() {
     second = first;
     second.hasRegion = false;
     CHECK(!membership::transactions::equal(first, second));
+    namespace route=dawn::server::bap::encrypted::activity_message::membership;
+    namespace client=dawn::middleware::bap::activity_message::client_authoritative_data;
+    client::ClientAuthoritativeData parsed{};
+    parsed.currentLeg={8,0x12345678,64,1,2,true};parsed.pendingLeg={7,0xFEDCBA98,56,0,1,true};
+    ActivityState state{};auto record=fresh_record(64);auto mutation=region_move(state,record,56);
+    const auto mapped=route::make_authoritative(parsed,"mission_ember");
+    mutation.authoritativeInput.currentLeg=mapped.currentLeg;mutation.authoritativeInput.pendingLeg=mapped.pendingLeg;
+    mutation.authoritativeGuard=mutation.authoritativeInput;
+    mutation.regionTransition.after=membership::transactions::merge(mutation.regionTransition.after,mutation.authoritativeInput);
+    mutation.regionTransitionGuard=mutation.regionTransition;
+    CHECK(membership::transactions::commit_authoritative(state,record,mutation));
+    CHECK(record.membership.currentLeg==mapped.currentLeg && record.membership.pendingLeg==mapped.pendingLeg);
 }
 
 void accepted_region_move_advances_before_publication() {
@@ -152,6 +167,29 @@ void mutated_after_image_is_rejected_without_partial_commit() {
     CHECK(state.stateRevision == kInitialStateRevision);
 }
 
+void sibling_changes_are_allowed_only_for_one_au() {
+    for (int variant = 0; variant < 5; ++variant) {
+        ActivityState state{};
+        SessionRecord record = fresh_record(120);
+        record.destination.activityIndex = forced::prelaunch::kOneAu.activity;
+        const auto package = forced::prelaunch::kOneAu.package;
+        std::memcpy(record.destination.packageName.data(), package.data(), package.size());
+        record.destination.packageNameLength = static_cast<std::uint8_t>(package.size());
+        if (variant == 0) record.destination.activityIndex = 0;
+        if (variant == 1) record.destination.packageName[0] ^= 1;
+        CHECK(vanilla::one_au::selected(record.destination) == (variant >= 2));
+        membership::PendingMutation mutation = region_move(state, record, 88);
+        ++state.stateRevision; // A cinematic sibling host changes the global revision.
+        if (variant == 3) ++record.recordRevision;
+        if (variant == 4) mutation.authoritativeInput.region.hash ^= 1;
+        const bool expected = variant == 2;
+        CHECK(membership::transactions::commit_authoritative(state, record, mutation) == expected);
+        CHECK(record.membership.region.index == (expected ? 88 : 120));
+        CHECK(record.membership.revision == (expected ? 5U : 4U));
+        CHECK(state.stateRevision == kInitialStateRevision + (expected ? 2U : 1U));
+    }
+}
+
 } // namespace
 
 int main() {
@@ -160,6 +198,7 @@ int main() {
     stale_or_mutated_region_guard_is_rejected();
     exhausted_region_generation_rejects_the_whole_move();
     mutated_after_image_is_rejected_without_partial_commit();
+    sibling_changes_are_allowed_only_for_one_au();
 
     if (g_failureCount != 0) {
         std::cerr << g_failureCount << " activity host lifecycle check(s) failed\n";

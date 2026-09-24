@@ -95,6 +95,8 @@ struct MembershipSnapshot final {
     std::uint8_t hostSynchronizationToken{};
     bool hasHostSynchronizationToken{};
     RegionLeg currentLeg{},pendingLeg{};
+    /** Single-player native ownership; every region consistently names local member zero. */
+    bool localAmbassador{};
 };
 
 /** Selects a packed active state without changing any echoed transition token. */

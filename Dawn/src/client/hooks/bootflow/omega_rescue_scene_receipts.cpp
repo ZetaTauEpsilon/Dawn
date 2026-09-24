@@ -15,6 +15,8 @@
 #include "beyond_infinity_native_receipts.h"
 #include "beyond_infinity_future_cast.h"
 #include "../../../state/activity/beyond_infinity/runtime.h"
+#include "../../../state/activity/vanilla/homecoming/runtime.h"
+#include "../../../state/activity/vanilla/adieu/runtime.h"
 #include "../../../state/activity/strike_bond/runtime.h"
 #include "../../../state/activity/gateway/runtime.h"
 #include "omega_enemy_native_reference.h"
@@ -385,6 +387,8 @@ void complete_gateway_scene(Read& read,std::uintptr_t component,const GatewaySce
     if(complete) { gateway::observe_scene(capture.receipt,true); }
 }
 #include "beyond_infinity_scene_receipts.inl"
+#include "homecoming_scene_receipts.inl"
+#include "adieu_scene_receipts.inl"
 #include "strike_bond_ending_scene_receipts.inl"
 __declspec(noinline) void __fastcall tick(void* raw) noexcept {
     hooking::CallGate::Scope gate(g_gate);
@@ -415,7 +419,10 @@ __declspec(noinline) void __fastcall tick(void* raw) noexcept {
             beyond::observe_scene(receipt,false);observe_beyond_speech(beyondRead,component,beyondBefore,receipt);
         }
     }
+    if(gate.accepts_side_effects()) {observe_homecoming_scene(component);}
     original(raw);
+    if(gate.accepts_side_effects()) {observe_homecoming_scene(component);}
+    if(gate.accepts_side_effects()) {observe_adieu_scene(component);}
     if(gate.accepts_side_effects()) observe_garden_ending_speech(component);
     if(beyondOwned && gate.accepts_side_effects()) { finish_beyond_scene(beyondRead,component,beyondBefore,beyondOwner); }
     if(gatewayOwned && gate.accepts_side_effects()) { complete_gateway_scene(gatewayRead,component,gatewayCapture); }
@@ -480,6 +487,8 @@ bool uninstall_omega_rescue_scene_receipts() noexcept {
     if(g_original.load(std::memory_order_acquire)==nullptr) {return true;}
     const std::array protectedEntries{
         hooking::detour::ProtectedCodeEntry{reinterpret_cast<void*>(&tick)},
+        hooking::detour::ProtectedCodeEntry{reinterpret_cast<void*>(&observe_homecoming_scene)},
+        hooking::detour::ProtectedCodeEntry{reinterpret_cast<void*>(&observe_adieu_scene)},
         hooking::detour::ProtectedCodeEntry{reinterpret_cast<void*>(&read_beyond_scene)},
         hooking::detour::ProtectedCodeEntry{reinterpret_cast<void*>(&finish_beyond_scene)},
         hooking::detour::ProtectedCodeEntry{reinterpret_cast<void*>(&prepare_beyond_scene)},

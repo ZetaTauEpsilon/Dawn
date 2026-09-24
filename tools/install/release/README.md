@@ -17,6 +17,30 @@ overwrite an existing release, and prints the ZIP hash. Send players the ZIP.
 They extract it and double-click `Update-Dawn.cmd` to keep an existing save,
 or `Install-Dawn.cmd` to start fresh.
 
+## Uninstalling
+
+Close Destiny 2 and double-click `Uninstall-Dawn.cmd`, then enter the game folder.
+The launcher and `Uninstall-Dawn.ps1` work without a release manifest or payload.
+Use `-GameRoot 'D:\Games\Destiny 2' -WhatIf` to preview from PowerShell.
+
+The uninstaller permanently deletes both Dawn runtime folders (including all
+saves, settings, and caches), Dawn DLLs/debug symbols, and the entire `.dawn`
+directory with all installer backups. It keeps original game files, other mods'
+DLLs, and native display preferences. There is no retained uninstall backup.
+It refuses to move source checkouts, linked folders, or files while Destiny 2 runs.
+Before final deletion, failures attempt to return staged files. An interrupted
+process may leave temporary files under `.dawn/uninstall-backups`; re-running the
+uninstaller removes them too after a successful uninstall.
+
+Original x64 Steam Client API DLLs are restored from `.dawn/original`, completed
+release backups, or development backups, when available. Older Dawn DLLs are never
+used as originals. You can supply `-OriginalDll 'D:\Backup\steam_api64.dll'` for
+both load locations. If no original exists, Dawn is still removed, and the script
+reports which DLLs must be recovered from your original game backup before launch.
+
+Run `tools/install/tests/release_uninstaller.tests.ps1` on Windows PowerShell 5.1
+and current PowerShell. It uses disposable fixtures and never touches a real game.
+
 ## Preserving updates
 
 `Update-Dawn.ps1` delegates to the same transaction engine with `-Update`.

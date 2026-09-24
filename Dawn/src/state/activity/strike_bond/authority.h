@@ -141,7 +141,7 @@ template<class Writer> bool write_body(Writer& w,const Frame& f,std::uint32_t ke
         return coo::native_scene::cast_scene(w,scene.generation,participants(kScenes[i]).view(),std::span(scene.events).first(scene.eventCount),1,scene.stop);
     }
     case 53:return coo::native_presentation::dialogue(w,f.generations,f.activeRow);
-    case 68:return coo::native_presentation::objective(w,f.presentation,audience(f.region),true);
+    case 68:return coo::native_presentation::waypoint_objective(w,f.presentation,audience(f.region),true);
     case 70:return w.write(0,5) && w.write(0,1) && w.write(32769U,16) && w.write(0,1);
     default:return false;
     }

@@ -94,6 +94,8 @@ struct SenseObject final {
     bool hasMonitorOutput{};
     combatant_sense::Output combatantOutput{};
     bool hasCombatantOutput{};
+    ghost_sense::Output ghostOutput{};
+    bool hasGhostOutput{};
     object_sense::Output objectOutput{};
     device_sense::Output deviceOutput{};
     native_sense::Passenger passengerOutput{};

@@ -8,6 +8,7 @@
 #include "fixtures/coo_ending_legacy.h"
 #ifdef OMEGA_PORT_LOCAL
 #include "fixtures/hijacked_full_roster.h"
+#include "state/activity/vanilla/homecoming/continuation.h"
 #endif
 
 namespace coo=dawn::state::activity::coo;
@@ -180,11 +181,34 @@ void hijacked_full_packet() {
     frame.generations[0]=385;
     CHECK(wire::encode_sensor_auth_update(snapshot,packet,size) && size==5868);
 }
+void homecoming_terminal_publication() {
+    namespace home=dawn::state::activity::vanilla::homecoming;
+    // Hold a known-valid non-Omega roster constant to isolate the terminal
+    // lifetime bug in the real packet encoder (not a test-only validator).
+    hijacked_fixture::Startup fixture;auto& snapshot=fixture.snapshot;
+    auto& frame=snapshot.homecoming;const coo::Generation owner{19,257};
+    frame.enabled=frame.finished=true;frame.spawnGeneration=owner.value;
+    frame.completion={owner,true,6};frame.cinematic.owner=owner;
+    frame.cinematic.movie=home::cinematics::kOutro;frame.cinematic.phase=home::cinematics::Phase::complete;
+    snapshot.missionCompletion=frame.completion;
+    std::array<std::byte,16384> packet{};std::size_t size{};
+    snapshot.lifetime=8;
+    CHECK(!wire::encode_sensor_auth_update(snapshot,packet,size) && size==0);
+    snapshot.lifetime=home::continuation::lifetime(frame,3);
+    CHECK(snapshot.lifetime==6 && wire::encode_sensor_auth_update(snapshot,packet,size) && size>0);
+    // The snapshot and the shared lifetime body must agree: the old body also
+    // independently forced Homecoming to native orbit state 8.
+    std::array<std::byte,4096> body{};bits::Writer writer(body);
+    CHECK(wire::legacy_write_auth_body(writer,snapshot,home::kRuntime,17,3,false));
+    CHECK(writer.finish(size) && size>0);
+    CHECK((std::to_integer<unsigned>(body[0])>>4)==7); // biased success state 6
+}
 #endif
 
 int main() {
 #ifdef OMEGA_PORT_LOCAL
     hijacked_full_packet();
+    homecoming_terminal_publication();
 #endif
     CHECK(coo::Executor::valid(coo::ending::kDefinition));CHECK(coo::Executor::valid(coo::ending::kRetry));
     accepted_timeline();paths();delayed_receipts();

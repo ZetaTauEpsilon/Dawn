@@ -42,7 +42,7 @@ constexpr std::uint64_t kDescriptorCount = 128;
     const bool advertise = snapshot.citizen.present
                            && static_cast<std::int32_t>(region) == snapshot.citizen.regionIndex;
     const std::uint64_t ambassadorSlot =
-        advertise ? static_cast<std::uint64_t>(snapshot.citizen.ambassadorSlot) + kSignedFieldBias
+        snapshot.localAmbassador ? 1U : advertise ? static_cast<std::uint64_t>(snapshot.citizen.ambassadorSlot) + kSignedFieldBias
                   : kUnadvertisedAmbassadorSlot;
     bool encoded = writer.write(kRegionIndexBias + region, 32) && writer.write(1, 2)
                    && writer.write(0, 8) && writer.write(kAmbassadorAssigned, 2)

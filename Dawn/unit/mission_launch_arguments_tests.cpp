@@ -133,13 +133,13 @@ int main(int argc, char** argv) {
         "ordinary request clears prior manual payload and retains exact variant identity");
     launch::poll();
     namespace openings = launch::openings;
-    constexpr std::array<const char*, 11> packages{"mission_towerfall", "mission_abs", "adventure_ginger",
-        "adventure_vod", "adventure_whisk", "mission_pact", "adventure_rumba", "mission_bond", "mission_scot", "strike_pact", "strike_bond"};
-    constexpr std::array<unsigned, 11> bubblesExpected{9, 15, 51, 15, 4, 15, 13, 15, 15, 15, 15};
-    constexpr std::array<unsigned, 11> slicesExpected{72, 120, 408, 120, 32, 120, 104, 120, 120, 120, 120};
-    constexpr std::array<std::uint32_t, 11> spawnsExpected{0, 0x69F52B3E, 0x43954D08, 0x26B11B02,
-        0x3AE5AC33, 0x0E1523FE, 0x1BD69720, 0xB09FB979, 0x4AB3287A, 0x0E1523FE, 0xB09FB979};
-    constexpr std::array<unsigned,11> nativeIds{266,292,293,294,295,296,297,298,299,230,229};
+    constexpr std::array<const char*, 12> packages{"mission_towerfall", "mission_abs", "adventure_ginger",
+        "adventure_vod", "adventure_whisk", "mission_pact", "adventure_rumba", "mission_bond", "mission_scot", "strike_pact", "strike_bond", "mission_ember"};
+    constexpr std::array<unsigned, 12> bubblesExpected{9, 15, 51, 15, 4, 15, 13, 15, 15, 15, 15, 8};
+    constexpr std::array<unsigned, 12> slicesExpected{72, 120, 408, 120, 32, 120, 104, 120, 120, 120, 120, 64};
+    constexpr std::array<std::uint32_t, 12> spawnsExpected{0, 0x69F52B3E, 0x43954D08, 0x26B11B02,
+        0x3AE5AC33, 0x0E1523FE, 0x1BD69720, 0xB09FB979, 0x4AB3287A, 0x0E1523FE, 0xB09FB979, 0x2EA8FB98};
+    constexpr std::array<unsigned,12> nativeIds{266,292,293,294,295,296,297,298,299,230,229,281};
     for (std::size_t i = 0; i < packages.size(); ++i) {
         check(launch::request_opening(i), "opening queues its own installed activity");
         const auto opening = launch::snapshot();

@@ -7,6 +7,11 @@
 
 #include "../../../core/logging/log.h"
 #include "../../../state/activity/runtime.h"
+#include "../../../state/activity/vanilla/one_au/runtime.h"
+#include "../../../state/activity/vanilla/homecoming/runtime.h"
+#include "../../../state/activity/vanilla/adieu/runtime.h"
+#include "../../../server/bap/runtime.h"
+#include "../../../state/activity/vanilla/homecoming/prologue.h"
 #include "../../hooking/call_gate.h"
 #include "../../hooking/detour.h"
 #include "bootflow_hook_lifecycle.h"
@@ -43,7 +48,8 @@ hooking::detour::Handle g_suppressedHandle{};
 
 /** Answers "suppressed" only while the ending handoff's transition window is armed. */
 bool __fastcall loading_cinematics_suppressed() noexcept {
-    if (omega_activity_handoff::suppress_active() || state::activity::gateway_intro::suppress_loading()) {
+    if (omega_activity_handoff::suppress_active() || client::activity::mission_launch::suppress_loading() || state::activity::gateway_intro::suppress_loading()
+        || state::activity::vanilla::homecoming::prologue::suppress_loading()) {
         return true;
     }
     const Suppressed original = g_suppressedOriginal.load(std::memory_order_acquire);
@@ -126,6 +132,10 @@ void poll_world_step() noexcept {
     // Spawning can finish before step 38, after which Destiny no longer calls the spawn gate.
     // Keep arrival observation and its pending fade completion alive on the camera frame.
     state::activity::newlight::launchpad::poll_native_objects();
+    // The reset is latched by the selected Adieu run. Refresh outside the
+    // mission/account locks to preserve the BAP -> mission lock order.
+    if(state::activity::vanilla::adieu::prepare_starting_loadout())
+        static_cast<void>(server::bap::publish_external_account_mutation());
     poll_opening_fade();
     poll_spawn_arrival();
     g_publishedStep.store(read_step(), std::memory_order_relaxed);
@@ -136,6 +146,8 @@ void poll_world_step() noexcept {
     // The camera owner invokes this poll every frame. Keep the native HUD call on that game thread;
     // calling it from the embedded server's keepalive worker is not safe.
     sample_omega_directive_presentation();
+    state::activity::vanilla::one_au::poll_escape_ship();
+    state::activity::vanilla::homecoming::poll_bazaar_door();
     omega_activity_handoff::poll();
     launchpad_handoff::poll();
     hijacked_placements::poll();

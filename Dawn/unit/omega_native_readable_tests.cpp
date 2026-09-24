@@ -24,16 +24,20 @@ int main() {
     check(VirtualProtect(data + page, page, PAGE_NOACCESS, &previous) != 0, "protect no access");
     check(!memory::readable(data + page, 1), "no access rejected");
     check(!memory::readable(data + page - 1, 2), "crossing into no access rejected");
+    check(!memory::readable(data, page * 32), "large span rejects an inaccessible middle region");
     check(VirtualProtect(data + page, page, PAGE_READWRITE | PAGE_GUARD, &previous) != 0, "protect guard");
     check(!memory::readable(data + page, 1), "guard rejected without touching");
     check(!memory::readable(data + page - 1, 2), "crossing into guard rejected");
+    check(!memory::readable(data, page * 32), "large span rejects a guarded middle region without touching it");
     MEMORY_BASIC_INFORMATION region{}; VirtualQuery(data + page, &region, sizeof region);
     check((region.Protect & PAGE_GUARD) != 0, "guard not consumed");
     check(VirtualProtect(data + page, page, PAGE_READONLY, &previous) != 0, "protect read only");
     check(memory::readable(data + page, 1), "read only accepted");
+    check(memory::readable(data, page * 32), "large readable table may cross regions with different readable protection");
     check(VirtualFree(data + page, page, MEM_DECOMMIT) != 0, "decommit");
     check(!memory::readable(data + page, 1), "decommitted rejected, no cached permissions");
     check(!memory::readable(data + page - 1, 2), "crossing into decommitted page rejected");
+    check(!memory::readable(data, page * 32), "large span rejects a decommitted middle region");
     check(VirtualFree(data, 0, MEM_RELEASE) != 0, "release");
     check(!memory::readable(data, 1), "released address rejected");
     // Same-process check against a large resident allocation, matching the

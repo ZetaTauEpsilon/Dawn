@@ -19,6 +19,7 @@
 #include "../retail_log/retail_log_enqueue_observer.h"
 #include "internal.h"
 #include "mission_prelaunch.h"
+#include "../../activity/mission_launch.h"
 
 namespace dawn::client::hooks::bootflow {
 namespace {
@@ -1797,6 +1798,11 @@ __declspec(noinline) void __fastcall manager_update_loop(std::byte* manager) noe
     }
 
     try_install_prelaunch_contract();
+
+    // This native session update survives orbit's missing camera. The launch
+    // adapter validates primary-session identity and exact setup:orbit state;
+    // it never dispatches from Present, a worker, or an in-world fallback.
+    client::activity::mission_launch::poll_orbit(reinterpret_cast<std::uintptr_t>(manager));
 
     const bool directContract =
         g_directContractPublished.load(std::memory_order_acquire);

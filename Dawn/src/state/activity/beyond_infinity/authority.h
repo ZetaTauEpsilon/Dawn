@@ -40,7 +40,7 @@ bool write_body(Writer& w,const Frame& f,std::uint32_t key,std::uint8_t type,std
     const auto asset=find(key,type,slot)->asset;
     if(type==37)return coo::native_generator::write_activation(w,coo::native_generator::beyond_request(f.forestSeed,f.forestPass,f.forestReady && !f.finished));
     if(asset==kDialogueAsset) { return coo::native_presentation::dialogue(w,f.generations,f.activeRow); }
-    if(type==68) { return coo::native_presentation::objective(w,f.presentation); }
+    if(type==68) { return coo::native_presentation::waypoint_objective(w,f.presentation); }
     const auto& state=f.native[asset_index(asset)];
     if(type==43) {
         const auto& scene=kScenes[scene_index(asset)];

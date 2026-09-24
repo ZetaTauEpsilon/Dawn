@@ -7,7 +7,7 @@ namespace dawn::client::hooks::bootflow::coo_native {
 // must resolve back to itself and the expected entity. Reflected base/interface
 // rows may alias that same component; only distinct matching components conflict.
 template<class Read,std::size_t MaximumRows=256> bool component(Read& read,std::uint32_t bundle,std::uint32_t entity,
-                                   std::uint32_t kind,std::uintptr_t& result) noexcept {
+                                   std::uint32_t kind,std::uintptr_t& result,std::uint32_t definition=0) noexcept {
     static_assert(MaximumRows<=1024);
     result=0;std::array<std::uint32_t,64> visited{};std::size_t used{};
     while(bundle!=UINT32_MAX && used<visited.size()) {
@@ -24,7 +24,12 @@ template<class Read,std::size_t MaximumRows=256> bool component(Read& read,std::
                 std::int32_t offset{};std::uint32_t actual{},owner{},self{};
                 if(!read.value(rows+i*24+0x14,offset) || offset<0 || offset>0x400000 || base>UINTPTR_MAX-static_cast<std::uintptr_t>(offset)-0x30) { return false; }
                 const auto address=base+static_cast<std::uintptr_t>(offset);
+                // Interface rows can alias one already validated component.
+                // Re-resolving hundreds of aliases exhausted the bounded reader
+                // before it reached the end of vehicle/player resource bundles.
+                if(result && address==result) { continue; }
                 if(!read.value(address+4,actual)) { return false; }if(actual!=kind) { continue; }
+                if(definition) {if(!read.value(address,actual)) {return false;}if(actual!=definition) {continue;}}
                 std::uintptr_t resolved{};
                 if(!read.value(address+0x24,self) || self==UINT32_MAX || !read.value(address+0x2C,owner) || owner!=entity
                     || !read.resolve(self,resolved) || resolved!=address || (result && result!=address)) { return false; }

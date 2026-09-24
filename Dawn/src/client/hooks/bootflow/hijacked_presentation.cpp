@@ -1,6 +1,7 @@
 #include <Windows.h>
 #include "hijacked_presentation.h"
 #include "gateway_native_read.h"
+#include "mission_waypoint_native.h"
 #include "../../../state/activity/hijacked/runtime.h"
 namespace dawn::client::hooks::bootflow::hijacked_presentation {
 namespace {
@@ -28,8 +29,21 @@ void observe_directive(void* instance) noexcept {
     const auto native=functions();
     const auto content=native.content?native.content(component):nullptr;
     const bool ready=content && native.ready && native.ready();
+    std::uint32_t visible=UINT32_MAX;
+    if(ready && f.presentation.active && f.presentation.published) {
+        std::array<std::byte,0x1488> banners{};
+        if(copy(reinterpret_cast<std::byte*>(GetModuleHandleW(nullptr))+0x2FB6838,banners))visible=visible_row(b,banners,f);
+    }
     mission::observe_objective_readiness(owner,read<std::uint32_t>(b,0x48),
-        reinterpret_cast<std::uintptr_t>(component),reinterpret_cast<std::uintptr_t>(content),ready);
+        reinterpret_cast<std::uintptr_t>(component),reinterpret_cast<std::uintptr_t>(content),ready,f.presentation.revision,visible);
+    const auto index=read<std::uint32_t>(b,0x478);
+    if(ready && !f.finished && f.presentation.active && f.presentation.published && index<3
+        && read<std::uint32_t>(b,0x190+index*0xF8)==f.presentation.event && read<std::uint8_t>(b,0x198+index*0xF8)==0) {
+        const auto latest=mission::request();
+        if(latest.owner==owner && latest.frame.enabled && !latest.frame.finished && latest.frame.presentation.active
+            && latest.frame.presentation.event==f.presentation.event && latest.frame.presentation.revision==f.presentation.revision && owns(component,b))
+            mission_waypoint_native::restore_meshes(mission_waypoint_native::hijackedMeshes);
+    }
 }
 namespace {
 Functions functions() noexcept {

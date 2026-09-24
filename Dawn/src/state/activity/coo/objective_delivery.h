@@ -19,6 +19,12 @@ public:
         if(ready_)pending_=true;
         return true;
     }
+    // 0.1.5.2 Hijacked: already-visible content acknowledges a readiness recovery
+    // without replaying the same objective banner through another ring slot.
+    void acknowledge(Generation owner,std::uint32_t logicalRevision,std::uint32_t row) noexcept {
+        if(owner.valid() && owner==owner_ && ready_ && !exhausted_ && generation_!=0
+            && logicalRevision==logicalRevision_ && row==(generation_-1U)%3U)pending_=false;
+    }
     ObjectiveState project(Generation owner,ObjectiveState value) noexcept {
         select(owner);
         if(value.published && ready_ && (pending_ || value.revision!=logicalRevision_)) {

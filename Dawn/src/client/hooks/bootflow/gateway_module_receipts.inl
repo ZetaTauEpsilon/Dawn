@@ -38,6 +38,9 @@ void observe_gateway_module(void* raw) noexcept {
     observe_hijacked_object(raw);
     state::activity::newlight::launchpad::observe_native_object(raw);
     observe_strike_bond_object(raw);
+    state::activity::vanilla::one_au::observe_native_object(raw);
+    state::activity::vanilla::homecoming::observe_native_object(raw);
+    state::activity::vanilla::adieu::observe_native_object(raw);
     observe_gateway_object(raw);
     observe_trial_object(raw);
     namespace gateway=state::activity::gateway;

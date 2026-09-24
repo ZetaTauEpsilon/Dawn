@@ -1,4 +1,10 @@
 #include "../../../../../state/activity/Newlight/launchpad/transit.h"
+#include "../../../../../state/activity/vanilla/one_au/transit.h"
+#include "../../../../../state/activity/vanilla/one_au/runtime.h"
+#include "../../../../../state/activity/vanilla/homecoming/transit.h"
+#include "../../../../../state/activity/vanilla/adieu/transit.h"
+#include "../../../../../state/activity/vanilla/homecoming/runtime.h"
+#include "../../../../../state/activity/vanilla/homecoming/prologue.h"
 #include "activity_keepalive_push.h"
 #include "../../../../../state/activity/gateway/runtime.h"
 #include "../../../../../state/activity/deadly_trial/runtime.h"
@@ -283,12 +289,21 @@ bool consume_activity_keepalive(Session& session,
             || state::activity::beyond_infinity::transit::membership_due(session.activity.instance,
                 state::activity::mission_run_generation(),now)
             || runtime::activity::native_activity_transit::membership_due(
-                session.activity.instance, now));
+                session.activity.instance, now)
+            || state::activity::vanilla::one_au::transit::membership_due(session.activity.instance,
+                state::activity::mission_run_generation(),now)
+            || state::activity::vanilla::adieu::transit::membership_due(session.activity.instance,
+                state::activity::mission_run_generation(),now)
+            || state::activity::vanilla::homecoming::transit::membership_due(session.activity.instance,
+                state::activity::mission_run_generation(),now));
     const bool keepaliveDue = now >= session.activity.keepaliveDueTick
         || endingMembershipDue
         || (!session.activity.joinedForeignSession
             && (state::activity::omega_presentation::publication_due(now)
                 || state::activity::omega_first_lair::publication_due(now)
+                || state::activity::vanilla::one_au::publication_due(now)
+                || state::activity::vanilla::adieu::publication_due(now)
+                || state::activity::vanilla::homecoming::publication_due(now)
                 || state::activity::gateway::publication_due(now)
                 || state::activity::deadly_trial::publication_due(now)
                 || state::activity::beyond_infinity::publication_due(now)
@@ -296,7 +311,7 @@ bool consume_activity_keepalive(Session& session,
                 || state::activity::strike_bond::publication_due(now)
                 || state::activity::strike_pact::publication_due(now)
                 || state::activity::hijacked::publication_due(now)
-                || (state::activity::newlight::launchpad::publication_due(now) || state::activity::newlight::launchpad::tower::active() || state::activity::gateway_intro::active())));
+                || (state::activity::newlight::launchpad::publication_due(now) || state::activity::newlight::launchpad::tower::active() || state::activity::gateway_intro::active() || state::activity::vanilla::homecoming::prologue::active())));
     if (session.activity.joinedForeignSession) {
         // This link exists only so the client's second activity instance sees traffic. A roster or
         // membership push on it leaves the transition running with no world entered.

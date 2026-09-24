@@ -80,11 +80,33 @@ void check_gameplay_clock_transport() {
             "archive Omega ignores non-archive gameplay clock field");
     }
 }
+void check_one_au_respawns() {
+    for(const bool oneAu:{false,true}) for(const bool darkness:{false,true})
+        for(const bool otherRestriction:{false,true}) {
+            wire::Snapshot snapshot{};snapshot.one_au.enabled=oneAu;
+            snapshot.one_au.restricted=darkness;snapshot.nativeRespawnRestricted=otherRestriction;
+            std::array<std::byte,4096> packet{};bits::Writer writer(packet);
+            check(wire::write_auth_body(writer,snapshot,0x4786C0E0U,13,0,true),
+                "participation body encodes respawn policy");
+            const bool hasDelay=oneAu || otherRestriction;
+            bits::Reader reader(packet);std::uint64_t value{};
+            // The last 42 bits are fixed participation fields after the delay.
+            check(reader.skip(writer.bit_count()-42-(hasDelay?16:0)-1)
+                && reader.read(1,value) && value==(hasDelay?1U:0U),
+                "optional revive delay presence retains wire alignment");
+            if(hasDelay) check(reader.read(16,value) && value==(oneAu?0x4200U:0x4F80U),
+                "1AU always allows three-second respawns; other restricted missions retain thirty seconds");
+            check(reader.read(1,value) && value==0 && reader.read(1,value) && value==0
+                && reader.read(8,value) && value==128 && reader.read(32,value) && value==0x80000000U,
+                "respawn change leaves following participation fields unchanged");
+        }
+}
 #endif
 
 int main() {
 #ifdef OMEGA_PORT_LOCAL
     check_gameplay_clock_transport();
+    check_one_au_respawns();
 #endif
     // A Tower Watch publication must retain its original single dialogue record
     // and target-free directive even if unrelated Omega fields are populated.

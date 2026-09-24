@@ -20,7 +20,7 @@
 #include "internal.h"
 
 namespace {
-dawn::state::activity::coo::campaign_dialogue::Lease g_dialogueLease{};
+dawn::state::activity::coo::campaign_dialogue::SelectionLease g_dialogueLease{};
 }
 namespace dawn::client::hooks::network::investment {
 namespace {
@@ -134,7 +134,7 @@ template<class F> F entry(std::uintptr_t base,std::uintptr_t rva,std::array<std:
 }
 bool select(std::int16_t activity) noexcept {
     namespace policy=state::activity::coo::campaign_dialogue;
-    if (!policy::value(activity) && !g_dialogueLease.active) { return true; }
+    if (!policy::requested(activity) && !g_dialogueLease.active) { return true; }
     const auto base=reinterpret_cast<std::uintptr_t>(GetModuleHandleW(nullptr));
     using Get=std::uintptr_t(__fastcall*)();
     using Record=std::uintptr_t(__fastcall*)(std::uintptr_t);
@@ -190,8 +190,8 @@ bool select(std::int16_t activity) noexcept {
         hooks::network::investment::arm_derived_rebuild();
         std::array<char,160> line{};
         const int size=std::snprintf(line.data(),line.size(),
-            "ev=campaign_dialogue activity=%d flag=51289EB0 value=%d result=native_commit",
-            static_cast<int>(activity),policy::value(activity) ? static_cast<int>(*policy::value(activity)) : -1);
+            "ev=campaign_dialogue activity=%d veteran=%u result=native_commit",
+            static_cast<int>(activity),activity==266?1U:0U);
         if (size>0 && static_cast<std::size_t>(size)<line.size()) {
             core::log::write(core::log::Channel::client,core::log::Level::info,{line.data(),static_cast<std::size_t>(size)});
         }
@@ -199,9 +199,9 @@ bool select(std::int16_t activity) noexcept {
     g_dialogueLease=lease;
     // Confirm the same evaluated flag the original dialogue condition reads.
     // An unresolved native investment accessor keeps the launch pending.
-    if (const auto expected=policy::value(activity)) {
+    for(const auto flag:policy::kFlags) if (const auto expected=policy::value(activity,flag)) {
         const auto accessor=provider(4);
-        if (!accessor || flagValue(accessor,static_cast<std::int16_t>(policy::kFlag))!=(*expected==2)) {
+        if (!accessor || flagValue(accessor,static_cast<std::int16_t>(flag))!=(*expected==2)) {
             hooks::network::investment::arm_derived_rebuild();
             return false;
         }

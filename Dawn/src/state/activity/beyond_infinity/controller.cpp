@@ -1,6 +1,7 @@
 #include "controller.h"
 #include "../coo/native_mission_forest_authority.h"
 #include "transit_contacts.h"
+#include "navigation.h"
 #include <cmath>
 
 namespace dawn::state::activity::beyond_infinity {
@@ -54,6 +55,8 @@ void Controller::position(std::uint64_t run,Point point) noexcept {
     for(std::size_t i=0;i<std::size(kVolumes);++i) { if(contains(kVolumes[i],point)) { inside_.set(i); } }
     if(!arrived_) { arrived_=!views_->observationStart || entered(views_->observationStart->asset,true); }
     if(arrived_) { seen_|=inside_; }
+    update_navigation();
+    frame_.wellEntered=entered({0xDA02FEF1,0x80F4618A,60,9},true);
     const bool previous=frame_.plateOccupied;
     frame_.plateOccupied=false;
     for(std::size_t i=0;i<std::size(kVolumes);++i) {
@@ -206,7 +209,7 @@ bool Controller::publish(const coo::Command& command) noexcept {
     const auto& spec=command.spec;
     switch(spec.operation) {
     case coo::Operation::objective:
-        dialogue_.objective(views_->dialogue,spec.argument,frame_,frame_.revision);objectives_.set(spec.argument,{});break;
+        dialogue_.objective(views_->dialogue,spec.argument,frame_,frame_.revision);objectives_.set(spec.argument,navigation::marker(spec.argument,frame_));break;
     case coo::Operation::dialogue:
         dialogue_.enqueue(views_->dialogue,static_cast<std::uint8_t>(spec.argument),now_,0,frame_.section,frame_.revision);break;
     case coo::Operation::scene: {
@@ -311,7 +314,20 @@ void Controller::update_module(std::uint32_t id,const coo::MissionInput& input,F
         frame_.lensExposed && !frame_.lensDestroyed,coo::native_activity_ticks(7000),frame_.gameplayClockTicks)) {frame_.enabled=false;}
     frame_.plateCapture.presentationPosition=!frame_.lensDestroyed && (frame_.plateOccupied || frame_.lensExposed)?.1F:0.F;
         if(!server::runtime::activity::mission_device_pose::desire(frame_.plateCapture.pose,frame_.plateCapture.presentationPosition)) {frame_.enabled=false;}
+    update_navigation();
+    if(objectives_.state().active)objectives_.marker(navigation::marker(objectives_.state().event,frame_));
     frame_.checked=frame_.finished;frame_.presentation=objectives_.state();frame_.completion=lifecycle_.publication();output=frame_;
+}
+void Controller::update_navigation() noexcept {
+    auto& p=frame_.navigation;
+    if(frame_.forestPass==1 && entered({0x8E70632B,0x80F460EE,60,9},true))p.forestPastComplete=true;
+    if(frame_.section>=3 && entered({0xC7FB7155,0x80F461BC,60,25},true))p.pastEncounter=true;
+    if(frame_.section>=4 && p.pastEncounter && (entered({0xC7FB7155,0x80F461BC,60,24},true)
+        || entered({0xC7FB7155,0x80F461BC,60,29},true) || entered({0x8E70632B,0x80F460EE,60,9},true)))p.pastReturn=true;
+    if(frame_.forestPass==2 && entered({0x8E70632B,0x80F460EE,60,8},true))p.forestFutureComplete=true;
+    if(frame_.section>=5 && entered({0x91AF0A4E,0x80F460DF,60,6},true))p.futureEntered=true;
+    if(frame_.section>=5 && entered({0x15FFBE16,0x80F4608A,60,17},true))p.futureReflection=true;
+    if(frame_.section>=6 && entered({0x45AFDE9B,0x80F460D4,60,3},true))p.futureReturn=true;
 }
 Frame Controller::update(std::uint64_t run,std::uint64_t now,bool ready) noexcept {
     if(!views_ || run!=run_ || !ready) { return {}; }

@@ -13,6 +13,11 @@
 #include "../../../core/logging/log.h"
 #include "../../hooking/call_gate.h"
 #include "../../hooking/detour.h"
+#include "one_au_entrance.h"
+#include "homecoming_entrance.h"
+#include "../../../state/activity/vanilla/homecoming/runtime.h"
+#include "../../../state/activity/vanilla/homecoming/ship_barrier.h"
+#include "../../../state/activity/Newlight/launchpad/runtime.h"
 
 namespace dawn::client::hooks::bootflow::omega_vex_lattice_probe {
 namespace detail {
@@ -156,6 +161,12 @@ __declspec(noinline) inline std::uint64_t __fastcall position(
     State before{},after{};
     const bool matched=call.accepts_side_effects() && snapshot(device,before);
     const auto result=hooking::await_original(positionOriginal)(device,requested,snap);
+    std::array<std::uint32_t,4> identity{};
+    if(call.accepts_side_effects() && requested==1.F && snap==1
+        && copy_bytes(device,identity.data(),sizeof identity)
+        && identity==std::array<std::uint32_t,4>{0x80C7069BU,0x80803910U,0xA78U,0}) {
+        state::activity::newlight::launchpad::apply_native_lighting_switch(device,requested,snap);
+    }
     if(call.accepts_side_effects() && matched && snapshot(device,after) && before.self==after.self) {
         receipt("position_worker",device,after,&before,caller,requested,snap,true);
     }
@@ -165,15 +176,32 @@ __declspec(noinline) inline std::uint8_t __fastcall tick(std::byte* device,const
     const hooking::CallGate::Scope call(callGate);
     const auto caller=reinterpret_cast<std::uintptr_t>(_ReturnAddress());
     State before{},after{};
+    // 1AU-fix patches the first snapshot call in this DF7FF0 callback. Run the
+    // repair before the native device tick, regardless of the lattice identity.
+    // The Ghost sensor's E4A590 callback is only for console ownership.
+    // Homecoming runs first so the 1AU diagnostic line stays the last report of this tick.
+    if(call.accepts_side_effects()) { homecoming_entrance::update(image,device);one_au_entrance::update(image,device); }
     const bool matched=call.accepts_side_effects() && snapshot(device,before);
     if(matched && !before.initialized) {
         receipt("first_tick_before",device,before,nullptr,caller,0,0,true);
     }
     const auto result=hooking::await_original(tickOriginal)(device,context);
+    const bool barrierPending=call.accepts_side_effects()
+        && state::activity::vanilla::homecoming::update_ship_barrier(device);
+    // Observe AFTER native initialization. A dormant device's own tick is not
+    // a command-delivery mechanism; retain a validated weak binding instead.
+    std::array<std::uint32_t,4> identity{};
+    if(call.accepts_side_effects() && copy_bytes(device,identity.data(),sizeof identity)
+        && identity==std::array<std::uint32_t,4>{0x80FA2F0AU,0x80803910U,0xA78U,0}) {
+        state::activity::newlight::launchpad::observe_native_lighting_scene(device);
+    }
     if(call.accepts_side_effects() && matched && snapshot(device,after) && before.self==after.self) {
         receipt("tick_after",device,after,&before,caller,0,0,!before.initialized);
     }
-    return result;
+    // DF7FF0 returning zero retires its scheduler callback. A ship barrier's
+    // device movement ends before its graph fade/receipt, so retain only that
+    // authenticated pending device until the guarded native release returns.
+    return state::activity::vanilla::homecoming::ship_barrier::tick_result(result,barrierPending);
 }
 inline bool idle() noexcept { return callGate.idle(); }
 } // namespace detail
@@ -209,8 +237,13 @@ inline bool uninstall() noexcept {
     using namespace detail;
     quiesce();
     if(!handles[0].attached && !handles[1].attached) { return true; }
-    const std::array<hooking::detour::ProtectedCodeEntry,4> entries{{
+    const std::array<hooking::detour::ProtectedCodeEntry,9> entries{{
         {reinterpret_cast<void*>(&position)},{reinterpret_cast<void*>(&tick)},
+        {reinterpret_cast<void*>(&one_au_entrance::update)},
+        {reinterpret_cast<void*>(&homecoming_entrance::update)},
+        {reinterpret_cast<void*>(&state::activity::vanilla::homecoming::update_ship_barrier)},
+        {reinterpret_cast<void*>(&state::activity::newlight::launchpad::apply_native_lighting_switch)},
+        {reinterpret_cast<void*>(&state::activity::newlight::launchpad::observe_native_lighting_scene)},
         {reinterpret_cast<void*>(&hooking::call_gate_detail::enter)},
         {reinterpret_cast<void*>(&hooking::call_gate_detail::leave)}}};
     if(hooking::detour::uninstall(handles,entries,&idle)!=hooking::detour::UninstallResult::removed) {

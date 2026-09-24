@@ -1,4 +1,7 @@
 #include "garden_ending_native.h"
+#include "../../../state/activity/vanilla/one_au/runtime.h"
+#include "../../../state/activity/vanilla/homecoming/runtime.h"
+#include "../../../state/activity/vanilla/adieu/runtime.h"
 #include "../../../state/activity/gateway/runtime.h"
 #include "../../../state/activity/beyond_infinity/runtime.h"
 #include "../../../state/activity/deep_storage/runtime.h"
@@ -34,6 +37,8 @@
 #include "omega_enemy_forest_receipts_runtime.h"
 #include "omega_enemy_lair_receipts.h"
 #include "omega_dialogue_bank.h"
+#include "gate_trace_cache.h"
+#include "tower_watch_probe_policy.h"
 #include "adventure_cue_observer.h"
 #include "adventure_dialogue_observer.h"
 #include "omega_teardown_native.h"
@@ -263,7 +268,7 @@ std::atomic_uint64_t g_lastDirectiveState{UINT64_MAX};
 hooking::detour::Handle g_gateHandle{};
 std::atomic<DialogueApply> g_gateOriginal{nullptr};
 std::atomic_uint32_t g_gateCount{};
-std::atomic_uint64_t g_lastGateState{UINT64_MAX};
+GateTraceCache<> g_gateTrace;
 // Native DF6BD0/DF7120 receive channel values in XMM1 (float ABI).
 using DeviceSetter = void(__fastcall*)(std::byte* device, float value, char snap,
                                        std::uint32_t revision) noexcept;
@@ -1080,7 +1085,7 @@ __declspec(noinline) void __fastcall dialogue_scan(std::byte* component) noexcep
     // The cue apply is synchronous, but local scene/spawner activation may be deferred to a
     // later component update. Sample the exact Tower Watch candidates periodically and emit only
     // when their pool or runtime fingerprint changes.
-    if ((count & 0xFFU) == 1U && tower_watch_forced()) {
+    if ((count & 0xFFU) == 1U && tower_watch_probe::active(tower_watch_forced)) {
         report_tower_watch_slots("followup_change",
                                  0U,
                                  0U,
@@ -1183,6 +1188,30 @@ __declspec(noinline) void __fastcall dialogue_dispatch(std::byte* component,
     if (original != nullptr) {
         original(component, index);
         bool beyondDispatch{};
+        if(component!=nullptr && index>=0 && index<55) {
+            std::uint32_t self{};std::int64_t offset{};const auto bank=resolve_bank_handle(component,self,offset);
+            if(bank==state::activity::vanilla::one_au::kBank) {
+                beyondDispatch=true;
+                const auto generation=read_value<std::uint32_t>(component+kRecordGenerationOffset+static_cast<std::size_t>(index)*0x20U);
+                state::activity::vanilla::one_au::observe_submission(gatewayDispatchRun,self,offset,bank,static_cast<std::uint8_t>(index),generation);
+            }
+        }
+        if(component!=nullptr && index>=0 && index<static_cast<std::int32_t>(std::size(state::activity::vanilla::homecoming::kDialogue))) {
+            std::uint32_t self{};std::int64_t offset{};const auto bank=resolve_bank_handle(component,self,offset);
+            if(bank==state::activity::vanilla::homecoming::kBank) {
+                beyondDispatch=true;
+                const auto generation=read_value<std::uint32_t>(component+kRecordGenerationOffset+static_cast<std::size_t>(index)*0x20U);
+                state::activity::vanilla::homecoming::observe_submission(gatewayDispatchRun,self,offset,bank,static_cast<std::uint8_t>(index),generation);
+            }
+        }
+        if(component!=nullptr && index>=0 && index<static_cast<std::int32_t>(std::size(state::activity::vanilla::adieu::kDialogue))) {
+            std::uint32_t self{};std::int64_t offset{};const auto bank=resolve_bank_handle(component,self,offset);
+            if(bank==state::activity::vanilla::adieu::kBank) {
+                beyondDispatch=true;
+                const auto generation=read_value<std::uint32_t>(component+kRecordGenerationOffset+static_cast<std::size_t>(index)*0x20U);
+                state::activity::vanilla::adieu::observe_submission(gatewayDispatchRun,self,offset,bank,static_cast<std::uint8_t>(index),generation);
+            }
+        }
         if(component!=nullptr && index>=0 && index<49) {
             std::uint32_t self{};std::int64_t offset{};
             const auto bank=resolve_bank_handle(component,self,offset);
@@ -1342,23 +1371,20 @@ __declspec(noinline) void __fastcall gate_apply(std::byte* component,
             }
         }
     }
-    // A committed-channel change (the closed tuple landing) always logs.
-    const std::uint64_t state =
-        component != nullptr
-            ? (read_value<std::uint64_t>(component + 0x1C0U)
-               ^ (read_value<std::uint64_t>(component + 0x1C8U) * 1099511628211ULL))
-            : 0U;
-    const bool changed = g_lastGateState.exchange(state, std::memory_order_acq_rel) != state;
-    const bool verbose = changed || count <= 6U || (count & 31U) == 0U;
-    if (component != nullptr && verbose) {
-        log_gate("apply_pre", component, count);
-    }
     const DialogueApply original = g_gateOriginal.load(std::memory_order_acquire);
     if (original != nullptr) {
         original(component, packet);
     }
-    if (component != nullptr && verbose) {
-        log_gate("apply_post", component, count);
+    // Compare committed state per component AFTER the native apply. Alternating
+    // an unchanged bound gate and an unchanged unbound gate is not a transition.
+    // Log actual changes plus a ten-second per-component heartbeat, not two
+    // synchronous log writes every authority refresh. Gameplay remains ungated.
+    if (component != nullptr) {
+        const GateTraceSample sample{reinterpret_cast<std::uintptr_t>(component),
+            read_value<std::uint32_t>(component),read_value<std::uint32_t>(component+0x24U),
+            {read_value<std::uint64_t>(component+0x1C0U),read_value<std::uint64_t>(component+0x1C8U),
+             read_value<std::uint64_t>(component+0x1D0U),read_value<std::uint64_t>(component+0x1F0U)}};
+        if(g_gateTrace.report(sample,GetTickCount64())) log_gate("apply_post",component,count);
     }
     state::activity::newlight::launchpad::observe_native_shutter_gate(component);
 }
@@ -1512,7 +1538,8 @@ __declspec(noinline) void __fastcall directive_apply(std::byte* component,
     if (component != nullptr && verbose) {
         log_directive("apply_pre", component, count);
     }
-    const bool inspectTowerWatch = component != nullptr && tower_watch_forced();
+    const bool inspectTowerWatch = component != nullptr
+                                  && tower_watch_probe::active(tower_watch_forced);
     const std::uint32_t cueBefore = inspectTowerWatch
                                         ? read_value<std::uint32_t>(component + 0x190U)
                                         : 0U;
@@ -2630,7 +2657,7 @@ void uninstall_omega_dialogue_dispatch_probe() noexcept {
     g_lastDirectiveState.store(UINT64_MAX, std::memory_order_release);
     g_gateOriginal.store(nullptr, std::memory_order_release);
     g_gateCount.store(0, std::memory_order_release);
-    g_lastGateState.store(UINT64_MAX, std::memory_order_release);
+    g_gateTrace.clear();
     g_deviceCh0Original.store(nullptr, std::memory_order_release);
     g_deviceCh1Original.store(nullptr, std::memory_order_release);
     g_deviceLogCount.store(0, std::memory_order_release);

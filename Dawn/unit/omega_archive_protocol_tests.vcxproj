@@ -17,7 +17,7 @@
     <RuntimeLibrary Condition="'$(Configuration)'=='Release'">MultiThreaded</RuntimeLibrary><RuntimeLibrary Condition="'$(Configuration)'=='Debug'">MultiThreadedDebug</RuntimeLibrary><Optimization Condition="'$(Configuration)'=='Debug'">Disabled</Optimization><Optimization Condition="'$(Configuration)'=='Release'">MaxSpeed</Optimization>
     <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions><AdditionalIncludeDirectories>$(OmegaSourceRoot);$(ProjectDir)..\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     <PreprocessorDefinitions Condition="'$(OmegaVariant)'!='reference'">OMEGA_PORT_LOCAL;WIN32;_WINDOWS;NOMINMAX;WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-  </ClCompile><Link><SubSystem>Console</SubSystem><AdditionalDependencies>user32.lib;%(AdditionalDependencies)</AdditionalDependencies></Link></ItemDefinitionGroup>
+  </ClCompile><Link><SubSystem>Console</SubSystem><StackReserveSize>16777216</StackReserveSize><AdditionalDependencies>user32.lib;%(AdditionalDependencies)</AdditionalDependencies></Link></ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="omega_archive_protocol_tests.cpp" />
     <ClCompile Include="$(OmegaSourceRoot)\middleware\bap\activity_message\activity_sensor_auth_bodies.cpp" />

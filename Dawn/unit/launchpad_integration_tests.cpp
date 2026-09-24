@@ -23,6 +23,8 @@ static unsigned checks{};
 #define CHECK(x) do {++checks;if(!(x)){std::fprintf(stderr,"line %d: %s\n",__LINE__,#x);std::abort();}} while(false)
 #include "launchpad_retirement_tests.h"
 #include "launchpad_shutter_tests.h"
+#include "launchpad_lighting_placed_tests.h"
+#include "launchpad_lighting_scene_tests.h"
 
 void verify_packet(const lp::Frame& frame) {
     namespace wire=dawn::middleware::bap::activity_message::sensor_auth_update;
@@ -78,8 +80,8 @@ void verify_objective_delivery(const std::filesystem::path& output) {
     constexpr unsigned selectors[]{0,0,1,2,0,2};
     for(unsigned stage=0;stage<std::size(rows);++stage) {
         const auto row=rows[stage];
-        const auto key=row==4?lp::kBreachRoute:lp::kDivideRoute;
-        const std::uint16_t slot=row==4?22:row==5?8:7;
+        const auto key=row==4?lp::kBreachRoute:row==7?lp::kHangarRoute:lp::kDivideRoute;
+        const std::uint16_t slot=row==4?22:row==5 || row==7?8:7;
         coo::Asset marker{};
         for(const auto& n:lp::kNavigation) {if(n.asset.registry==key && n.asset.slot==slot) {marker=n.asset;}}
         CHECK(marker.registry==key);
@@ -104,14 +106,14 @@ void verify_objective_delivery(const std::filesystem::path& output) {
                 CHECK(read(32)==expected);
             }
             CHECK(read(2)==1);CHECK(reader.skip(55));
-            CHECK(read(3)==(active?3U:1U)); // Decoded display mode 2 enables the marker.
+            CHECK(read(3)==1U); // Released route selector; not the previous display-mode override.
             for(unsigned target=0;target<4;++target) {
                 const bool selected=active && target==0;
                 CHECK(read(32)==(selected?key:0x811C9DC5U));
                 CHECK(read(7)==(selected?48U:0U));
                 CHECK(read(16)==(selected?32768U+slot:32767U));
                 CHECK(reader.skip(55));
-                for(unsigned word=0;word<4;++word) {CHECK(read(32)==(selected && word==0?0x811C9DC5U:0U));}
+                for(unsigned word=0;word<4;++word) {CHECK(read(32)==0x811C9DC5U);}
                 CHECK(read(1)==0);
             }
         }
@@ -130,9 +132,53 @@ void verify_objective_delivery(const std::filesystem::path& output) {
     }
 }
 
+void verify_lighting_graph_activation_edge() {
+    const auto& graph=lp::mission().phases[1].definition;
+    const auto doors=lp::asset(lp::kBreach,4,3);
+    unsigned requests{};bool retiredDuringPreparation{},lateLifecycleChange{};
+    for(const auto& step:graph.steps) {
+        for(const auto& command:step.commands) {
+            if(command.operation!=coo::Operation::device || command.asset!=doors) {continue;}
+            ++requests;
+            if(step.name=="Breach preparation" && command.argument==0) {retiredDuringPreparation=true;}
+            if(step.name!="Breach preparation") {lateLifecycleChange=true;}
+        }
+    }
+    CHECK(requests==1);
+    CHECK(retiredDuringPreparation);
+    CHECK(!lateLifecycleChange);
+}
+
+void verify_lighting_dynamic_edge() {
+    namespace bits=dawn::middleware::encoding::bits;
+    const auto decode=[](std::uint32_t generation) {
+        std::array<std::byte,(lp::lighting::kAuthorityBits+7)/8> bytes{};
+        bits::Writer writer(bytes);CHECK(lp::lighting::write(writer,generation));
+        CHECK(writer.bit_count()==lp::lighting::kAuthorityBits);
+        bits::Reader reader(bytes);CHECK(reader.skip(252));
+        std::uint64_t value{};CHECK(reader.read(1,value) && value==1);
+        CHECK(reader.read(32,value) && value==0x80805063U);
+        for(unsigned channel=0;channel<2;++channel) {CHECK(reader.skip(64+32));}
+        CHECK(reader.read(32,value) && value==(generation^0x80000000U));
+        CHECK(reader.read(32,value) && value==(generation^0x80000000U));
+        CHECK(reader.read(32,value) && value==0x3F800000U);
+        CHECK(lp::lighting::accepted(generation,static_cast<std::int32_t>(generation),1.F,1.F));
+        CHECK(!lp::lighting::accepted(generation,static_cast<std::int32_t>(generation+1),1.F,1.F));
+        CHECK(!lp::lighting::accepted(generation,static_cast<std::int32_t>(generation),0.F,1.F));
+        CHECK(!lp::lighting::accepted(generation,static_cast<std::int32_t>(generation),1.F,0.F));
+    };
+    decode(2);decode(17);
+    CHECK(lp::lighting::kSource==lp::asset(lp::kBreach,4,1));
+    CHECK(!lp::lighting::accepted(0,0,1.F,1.F));
+}
+
 int main(int argc,char** argv) {
     launchpad_retirement_tests::verify();
     launchpad_shutter_tests::verify();
+    launchpad_lighting_placed_tests::verify();
+    launchpad_lighting_scene_tests::verify();
+    verify_lighting_graph_activation_edge();
+    verify_lighting_dynamic_edge();
     verify_objective_delivery(argc>1?std::filesystem::path(argv[1]):std::filesystem::path{});
     // Only the rifle doorway is eligible for physical-device binding and
     // duplicate suppression; the same model behind the player stays native.
@@ -221,6 +267,37 @@ int main(int argc,char** argv) {
     const auto& shutter=controller->frame().native[lp::asset_index(lp::asset(lp::kBreach,23,75))];
     CHECK(shutter.managed && shutter.active && shutter.position==0.F);
     CHECK(!controller->frame().pickups[0].armed);
+    verify_bodies(controller->frame());
+
+    // Drive the actual mission/controller handshake, not a synthetic Frame.
+    // The wrong source/revision previously passed packet-size tests while
+    // trapping Ghost at the switch and leaving the second shutter closed.
+    controller->position(71,{390.F,-789.F,17.F});
+    std::uint64_t cueTime=131655;
+    for(unsigned tick=0;tick<12;++tick,cueTime+=125) {CHECK(controller->advance(71,cueTime,true));}
+    CHECK(controller->frame().ghost.phase==lp::ghost::Phase::lights);
+    const auto ghostGeneration=controller->frame().native[lp::asset_index(lp::ghost::kSource)].generation;
+    const lp::EnemyReceipt ghostActor{71,100,101,ghostGeneration,27,lp::kBreach};
+    CHECK(controller->admitted(ghostActor));
+    controller->ghost_sample(owner,ghostActor,{3,false});
+    for(unsigned tick=0;tick<12;++tick,cueTime+=125) {CHECK(controller->advance(71,cueTime,true));}
+    CHECK(controller->frame().lightRequested && !controller->frame().light);
+    CHECK(controller->prepared(owner,lp::lighting::kSource));
+    const auto lightGeneration=controller->frame().native[lp::asset_index(lp::lighting::kSource)].generation;
+    const coo::ObjectReceipt lightReceipt{{71,lightGeneration},lp::lighting::kSource,200,201,202};
+    CHECK(controller->object(lightReceipt));
+    auto wrongLight=lightReceipt;wrongLight.source=lp::asset(lp::kBreach,4,3);
+    CHECK(!controller->lights(owner,wrongLight));
+    CHECK(!controller->frame().light && shutter.position==0.F);
+    CHECK(controller->lights(owner,lightReceipt));
+    CHECK(!controller->lights(owner,lightReceipt)); // no replay
+    CHECK(controller->frame().ghost.returnReleased);
+    controller->ghost_sample(owner,ghostActor,{8,false});
+    for(unsigned tick=0;tick<12;++tick,cueTime+=125) {CHECK(controller->advance(71,cueTime,true));}
+    CHECK(controller->frame().light && controller->frame().ghost.ready());
+    CHECK(shutter.position==1.F && shutter.generation>1);
+    CHECK(!overlay.active && !overlay.desired);
+    CHECK(!controller->frame().fault);
     verify_bodies(controller->frame());
 
     // Native quest flags must start New Light and later release the forced start.

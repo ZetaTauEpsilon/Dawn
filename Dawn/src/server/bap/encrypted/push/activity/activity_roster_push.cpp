@@ -1,4 +1,6 @@
 #include "../../../../../state/activity/Newlight/launchpad/runtime.h"
+#include "../../../../../state/activity/vanilla/one_au/runtime.h"
+#include "../../../../../state/activity/vanilla/homecoming/runtime.h"
 #include "activity_roster_push.h"
 
 #include <Windows.h>
@@ -68,23 +70,27 @@ std::atomic_uint32_t g_towerfallDeliveryReports{};
     std::span<const std::byte,state::kAesKeySize> key,
     std::array<std::byte,state::kBapNonceSize>& nonce,
     std::span<std::byte> response,std::size_t& written) noexcept {
+    const bool oneAu=name=="mission_ember" && snapshot.one_au.enabled;
+    const auto oneAuCurrent=state::activity::vanilla::one_au::request();
+    const bool homecomingMission=name=="mission_towerfall" && snapshot.homecoming.enabled;
+    const auto homecomingCurrent=state::activity::vanilla::homecoming::request();
     const bool vendors=snapshot.vendorPresentation.enabled;
     const bool launchpad=name=="mission_launchpad" && snapshot.launchpad.enabled;
     const bool hijacked=name=="adventure_rumba" && snapshot.hijacked.enabled;
     const bool deep=name=="adventure_whisk" && snapshot.deep_storage.enabled;
     const bool strike=(name=="strike_pact" || name=="mission_pact") && snapshot.strike_pact.enabled;
     const bool garden=(name=="strike_bond" || name=="mission_bond") && snapshot.strike_bond.enabled;
-    if(!vendors && !launchpad && !garden && !hijacked && !deep && !strike && (name!="adventure_vod" || !snapshot.beyond_infinity.enabled)) { return true; }
+    if(!oneAu && !homecomingMission && !vendors && !launchpad && !garden && !hijacked && !deep && !strike && (name!="adventure_vod" || !snapshot.beyond_infinity.enabled)) { return true; }
     namespace beyond=state::activity::beyond_infinity;
     namespace clock=middleware::bap::activity_message::clock_state;
     const auto launchpadCurrent=state::activity::newlight::launchpad::request();
     const auto current=beyond::request();
     const auto deepCurrent=state::activity::deep_storage::request();
     const auto hijackedCurrent=state::activity::hijacked::request();
-    const auto owner=launchpad?launchpadCurrent.owner:garden?snapshot.strike_bond.completion.owner:hijacked?hijackedCurrent.owner:strike?snapshot.strike_pact.completion.owner:deep?deepCurrent.owner:current.owner;
-    const bool enabled=launchpad?launchpadCurrent.frame.enabled:garden?snapshot.strike_bond.enabled:hijacked?hijackedCurrent.frame.enabled:strike?snapshot.strike_pact.enabled:deep?deepCurrent.frame.enabled:current.frame.enabled;
-    const auto generation=launchpad?launchpadCurrent.frame.spawnGeneration:garden?snapshot.strike_bond.spawnGeneration:hijacked?hijackedCurrent.frame.spawnGeneration:strike?owner.value:deep?deepCurrent.frame.spawnGeneration:current.frame.spawnGeneration;
-    const auto expected=launchpad?snapshot.launchpad.spawnGeneration:garden?snapshot.strike_bond.spawnGeneration:hijacked?snapshot.hijacked.spawnGeneration:strike?snapshot.strike_pact.spawnGeneration:deep?snapshot.deep_storage.spawnGeneration:snapshot.beyond_infinity.spawnGeneration;
+    const auto owner=oneAu?oneAuCurrent.owner:homecomingMission?homecomingCurrent.owner:launchpad?launchpadCurrent.owner:garden?snapshot.strike_bond.completion.owner:hijacked?hijackedCurrent.owner:strike?snapshot.strike_pact.completion.owner:deep?deepCurrent.owner:current.owner;
+    const bool enabled=oneAu?oneAuCurrent.frame.enabled:homecomingMission?homecomingCurrent.frame.enabled:launchpad?launchpadCurrent.frame.enabled:garden?snapshot.strike_bond.enabled:hijacked?hijackedCurrent.frame.enabled:strike?snapshot.strike_pact.enabled:deep?deepCurrent.frame.enabled:current.frame.enabled;
+    const auto generation=oneAu?oneAuCurrent.frame.spawnGeneration:homecomingMission?homecomingCurrent.frame.spawnGeneration:launchpad?launchpadCurrent.frame.spawnGeneration:garden?snapshot.strike_bond.spawnGeneration:hijacked?hijackedCurrent.frame.spawnGeneration:strike?owner.value:deep?deepCurrent.frame.spawnGeneration:current.frame.spawnGeneration;
+    const auto expected=oneAu?snapshot.one_au.spawnGeneration:homecomingMission?snapshot.homecoming.spawnGeneration:launchpad?snapshot.launchpad.spawnGeneration:garden?snapshot.strike_bond.spawnGeneration:hijacked?snapshot.hijacked.spawnGeneration:strike?snapshot.strike_pact.spawnGeneration:deep?snapshot.deep_storage.spawnGeneration:snapshot.beyond_infinity.spawnGeneration;
     if(session.activity.joinedForeignSession || !lifecycle::activity_binding_is_current(session)
         || !session.activity.lineage.owns(session.activity.instance)
         || (!vendors && (!owner.valid() || owner.run!=state::activity::mission_run_generation()

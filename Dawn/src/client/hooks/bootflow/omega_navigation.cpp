@@ -12,6 +12,8 @@
 #include "omega_forest_recipe.h"
 #include "deadly_trial_presentation.h"
 #include "deep_storage_navigation_rules.h"
+#include "mission_navigation_hooks.h"
+#include "forest_strike_waypoints.h"
 #include "gateway_native_read.h"
 #include "../../../state/activity/deep_storage/runtime.h"
 #include "hijacked_presentation.h"
@@ -83,6 +85,7 @@ __declspec(noinline) std::uint32_t __fastcall route_point_hook(
     const auto original = g_routeOriginal.load(std::memory_order_acquire);
     const auto result = original != nullptr ? original(worker, currentNode, point) : 0U;
     if (!g_enabled.load(std::memory_order_acquire)) { return result; }
+    mission_navigation_hooks::forest_terminal(worker,currentNode,result);
     const auto nav = presentation::navigation();
     if (!nav.enabled) { return result; }
     std::array<std::byte, omega_forest::kWorkerPrefixSize> bytes{};
@@ -181,52 +184,31 @@ __declspec(noinline) void __fastcall directive_tick_hook(void* component) noexce
     const auto original=g_directiveTickOriginal.load(std::memory_order_acquire);
     if (original != nullptr) { original(component); }
     if(g_enabled.load(std::memory_order_acquire)) {
+        mission_waypoint_native::observe(component);
         hijacked_presentation::observe_directive(component);
         deadly_trial_presentation::observe_directive(component,
             reinterpret_cast<deadly_trial_presentation::Register>(g_registerPoint.load(std::memory_order_acquire)));
     }
     update_directive_navigation(component);
+    if(g_enabled.load(std::memory_order_acquire))forest_strike_waypoints::retire(component,g_registerPoint.load(std::memory_order_acquire));
+    if(g_enabled.load(std::memory_order_acquire))mission_navigation_hooks::tick(component,
+        g_registerPoint.load(std::memory_order_acquire),g_contextRevision.load(std::memory_order_acquire));
 }
 
-// Preserve a complete opening waypoint across repeated native build calls.
-// Other objectives retain their original native navigation lifecycle.
-bool build_deep_storage_navigation(void* instance,std::uint32_t context) noexcept {
-    namespace deep=state::activity::deep_storage;
-    namespace rules=deep_storage_navigation;
-    if(!g_enabled.load(std::memory_order_acquire) || context!=4) {return false;}
-    const auto publish=g_registerPoint.load(std::memory_order_acquire);
-    const auto revision=g_contextRevision.load(std::memory_order_acquire);
-    std::array<std::byte,0xB10> bytes{};
-    if(!publish || !revision || !copy(instance,bytes) || !rules::source(bytes)) {return false;}
-    const auto state=deep::request();
-    if(!state.owner.valid() || !state.frame.enabled || state.frame.finished || state.frame.section!=0) {return false;}
-    gateway_native::Read memory{reinterpret_cast<std::uintptr_t>(GetModuleHandleW(nullptr))};
-    std::uintptr_t resolved{};const auto self=rules::read<std::uint32_t>(bytes,0x48);
-    if(!memory.resolve(self,resolved) || resolved!=reinterpret_cast<std::uintptr_t>(instance)) {return false;}
-    const auto result=rules::build(bytes,context,state.frame.presentation);if(!result.handled) {return false;}
-    const auto latest=deep::request();
-    if(latest.owner!=state.owner || !latest.frame.enabled || latest.frame.finished
-        || latest.frame.presentation.revision!=state.frame.presentation.revision) {return false;}
-    auto* component=static_cast<std::byte*>(instance);
-    for(unsigned i=0;i<13;++i) {
-        if((result.publish&(1U<<i))==0) {continue;}const auto point=0x480+i*0x80;
-        for(const auto [offset,size]:std::array<std::pair<std::size_t,std::size_t>,5>{{{4,1},{12,1},{24,4},{32,16},{48,8}}}) {
-            std::memcpy(component+point+offset,bytes.data()+point+offset,size);
-        }
-        const omega_navigation::Reference reference{self,0x80804F55U,static_cast<std::int64_t>(point)};
-        publish(&reference);
-    }
-    const auto currentRevision=revision();std::memcpy(component+0xB00,&currentRevision,sizeof currentRevision);
-    component[0xB04]=std::byte{1};return true;
-}
 
 __declspec(noinline) void __fastcall directive_build_hook(void* component,
                                                         std::uint32_t context) noexcept {
     const Call call;
-    if(build_deep_storage_navigation(component,context)) {return;}
+    if(g_enabled.load(std::memory_order_acquire)) {
+        const auto publish=g_registerPoint.load(std::memory_order_acquire);const auto revision=g_contextRevision.load(std::memory_order_acquire);
+        if(mission_navigation_hooks::build_beyond(component,context,publish,revision)
+            || mission_navigation_hooks::build_deep(component,context,publish,revision)
+            || deadly_trial_presentation::build_directive(component,reinterpret_cast<deadly_trial_presentation::Register>(publish),revision))return;
+    }
     const auto original=g_directiveBuildOriginal.load(std::memory_order_acquire);
     if (original != nullptr) { original(component,context); }
     update_directive_navigation(component);
+    if(g_enabled.load(std::memory_order_acquire))forest_strike_waypoints::retire(component,g_registerPoint.load(std::memory_order_acquire));
 }
 
 /** Read-only capture of the native world-space HUD marker list. This distinguishes a

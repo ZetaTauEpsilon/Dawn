@@ -33,6 +33,7 @@ std::atomic_bool g_openingHostReady{};
  * Only a changed operator configuration or Clear re-arms the override. */
 bool g_omegaCompletionSuspended{};
 std::int16_t g_directActivity{destination::kAbsentActivityIndex};
+std::int16_t g_directChainSource{destination::kAbsentActivityIndex};
 
 [[nodiscard]] bool same_configuration(const ForcedDestination& left,
                                       const ForcedDestination& right) noexcept {
@@ -159,6 +160,7 @@ bool publish(const ForcedDestination& value) noexcept {
         !same_configuration(runtime::storage::g_state.activity.forced, value);
     runtime::storage::g_state.activity.forced = value;
     g_directActivity = destination::kAbsentActivityIndex;
+    g_directChainSource = destination::kAbsentActivityIndex;
     if (changed || !active(value)) { g_omegaCompletionSuspended = false; }
     ReleaseSRWLockExclusive(&runtime::storage::g_stateLock);
     if (changed || !active(value) || !prelaunch::configured(value)) {
@@ -189,11 +191,13 @@ bool publish(const ForcedDestination& value) noexcept {
     return true;
 }
 
-bool publish_direct(const ForcedDestination& value, std::int16_t activity) noexcept {
+bool publish_direct(const ForcedDestination& value, std::int16_t activity,
+                    std::int16_t chainSource) noexcept {
     if (!active(value) || !storable(value) || activity < 0) { return false; }
     AcquireSRWLockExclusive(&runtime::storage::g_stateLock);
     runtime::storage::g_state.activity.forced = value;
     g_directActivity = activity;
+    g_directChainSource = chainSource;
     g_omegaCompletionSuspended = false;
     g_prelaunchCommitted.store(true, std::memory_order_release);
     g_openingHostReady.store(false, std::memory_order_release);
@@ -263,6 +267,7 @@ void clear() noexcept {
     AcquireSRWLockExclusive(&runtime::storage::g_stateLock);
     runtime::storage::g_state.activity.forced = {};
     g_directActivity = destination::kAbsentActivityIndex;
+    g_directChainSource = destination::kAbsentActivityIndex;
     g_omegaCompletionSuspended = false;
     ReleaseSRWLockExclusive(&runtime::storage::g_stateLock);
     g_prelaunchCommitted.store(false, std::memory_order_release);
@@ -376,12 +381,19 @@ bool apply(destination::DestinationSelection& selection) noexcept {
     AcquireSRWLockShared(&runtime::storage::g_stateLock);
     value = g_omegaCompletionSuspended ? ForcedDestination{} : runtime::storage::g_state.activity.forced;
     const auto directActivity = g_directActivity;
+    const auto chainSource = g_directChainSource;
     ReleaseSRWLockShared(&runtime::storage::g_stateLock);
     if (!active(value)) return false;
     if (directActivity != destination::kAbsentActivityIndex) {
         const std::string_view incoming(reinterpret_cast<const char*>(selection.packageName.data()),
             selection.packageNameLength <= selection.packageName.size() ? selection.packageNameLength : 0);
-        if (selection.activityIndex != directActivity || selection.previousActivityIndex != directActivity
+        // A selection retail chains from the published source may carry that source or no
+        // previous activity at all; the exact activity and package still gate the override.
+        const bool chained = chainSource != destination::kAbsentActivityIndex
+            && (selection.previousActivityIndex == chainSource
+                || selection.previousActivityIndex == destination::kAbsentActivityIndex);
+        if (selection.activityIndex != directActivity
+            || (selection.previousActivityIndex != directActivity && !chained)
             || incoming != std::string_view(value.packageName.data(), value.packageNameLength)) { return false; }
         selection.arrivalBubbleOverride=value.bubble;selection.hasArrivalBubbleOverride=value.hasBubble;
         selection.sliceSetOverride=value.sliceSet;selection.hasSliceSetOverride=value.hasSliceSet;
@@ -394,7 +406,7 @@ bool apply(destination::DestinationSelection& selection) noexcept {
         return true;
     }
 
-    if (const auto* profile=prelaunch::configured(value); profile==&prelaunch::kGateway || profile==&prelaunch::kDeadlyTrial || profile==&prelaunch::kBeyondInfinity || profile==&prelaunch::kDeepStorage || profile==&prelaunch::kHauntedForest) {
+    if (const auto* profile=prelaunch::configured(value); profile==&prelaunch::kAdieu || profile==&prelaunch::kGateway || profile==&prelaunch::kDeadlyTrial || profile==&prelaunch::kBeyondInfinity || profile==&prelaunch::kDeepStorage || profile==&prelaunch::kHauntedForest || profile==&prelaunch::kOneAu) {
         const std::string_view incoming(reinterpret_cast<const char*>(selection.packageName.data()),
             selection.packageNameLength <= selection.packageName.size() ? selection.packageNameLength : 0);
         if (!g_prelaunchCommitted.load(std::memory_order_acquire)

@@ -12,13 +12,22 @@ inline bool protection_readable(DWORD protection) noexcept {
             | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY));
 }
 inline bool region_readable(const void* pointer, std::size_t size) noexcept {
-    MEMORY_BASIC_INFORMATION info{};
-    if (!VirtualQuery(pointer, &info, sizeof info) || info.State != MEM_COMMIT
-        || !protection_readable(info.Protect)) return false;
-    const auto first = reinterpret_cast<std::uintptr_t>(pointer);
-    const auto base = reinterpret_cast<std::uintptr_t>(info.BaseAddress);
-    return first >= base && first - base <= info.RegionSize
-        && size <= info.RegionSize - (first - base);
+    auto first = reinterpret_cast<std::uintptr_t>(pointer);
+    if (!first || !size || size - 1 > UINTPTR_MAX - first) return false;
+    // A native table can span adjacent committed regions with different readable
+    // protections. Validate the entire span without requiring a single region.
+    while (size) {
+        MEMORY_BASIC_INFORMATION info{};
+        if (!VirtualQuery(reinterpret_cast<const void*>(first), &info, sizeof info)
+            || info.State != MEM_COMMIT || !protection_readable(info.Protect)) return false;
+        const auto base = reinterpret_cast<std::uintptr_t>(info.BaseAddress);
+        if (first < base || first - base >= info.RegionSize) return false;
+        const auto available = info.RegionSize - (first - base);
+        if (size <= available) return true;
+        size -= available;
+        first += available;
+    }
+    return true;
 }
 inline bool readable(const void* pointer, std::size_t size) noexcept {
     const auto first = reinterpret_cast<std::uintptr_t>(pointer);

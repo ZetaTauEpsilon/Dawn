@@ -449,9 +449,11 @@ void maps_complete_towerfall_snapshot_by_stable_node_identity() {
     CHECK(missing.ambiguousObjects == 0U);
 }
 
+#include "partial_roster_cases.h"
 } // namespace
 
 int main() {
+    partial_roster::run();
     decodes_validated_cue_table();
     parses_two_native_monitor_bodies();
     parses_complete_native_omega_corpus();

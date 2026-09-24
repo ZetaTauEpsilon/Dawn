@@ -3,7 +3,7 @@
 #include "frame.h"
 #include "scan_playback.h"
 namespace dawn::state::activity::hijacked {
-void observe_objective_readiness(coo::Generation,std::uint32_t,std::uintptr_t,std::uintptr_t,bool) noexcept;
+void observe_objective_readiness(coo::Generation,std::uint32_t,std::uintptr_t,std::uintptr_t,bool,std::uint32_t logicalRevision=UINT32_MAX,std::uint32_t visibleRow=UINT32_MAX) noexcept;
 [[nodiscard]] coo::ReadinessRequest<EnemyReceipt> readiness_request(std::uint64_t now) noexcept;
 bool prepare(std::uint64_t,bool) noexcept;
 Frame snapshot(std::uint64_t,std::uint64_t,bool) noexcept;

@@ -1,4 +1,8 @@
 #include "../../../../../state/activity/Newlight/launchpad/transit.h"
+#include "../../../../../state/activity/vanilla/one_au/transit.h"
+#include "../../../../../state/activity/vanilla/homecoming/transit.h"
+#include "../../../../../state/activity/vanilla/adieu/transit.h"
+#include "../../../../../state/activity/vanilla/homecoming/prologue.h"
 #include "activity_membership_push.h"
 
 #include <Windows.h>
@@ -112,6 +116,44 @@ make_wire_snapshot(state::activity::ActivityInstanceKey activity,
         terminal = {{generic.host.state, generic.host.token, generic.host.sliceSetIndex,
                      generic.host.sliceSetHash}, generic.present, generic.arrived,
                     generic.released};
+    }
+    const auto oneAu=state::activity::vanilla::one_au::transit::project(activity,
+        state::activity::mission_run_generation(),snapshot.identity.memberKey,
+        name=="mission_ember" && layout.tag==state::activity::vanilla::one_au::kScenario,nativeTransit);
+    if(oneAu.publish) {terminal=oneAu;}
+    if(name=="mission_ember" && layout.tag==state::activity::vanilla::one_au::kScenario) {
+        const auto leg=[](const auto& v) {
+            return middleware::bap::activity_message::replicate_membership::RegionLeg{
+                v.sliceSetIndex,v.sliceSetHash,v.regionIndex,v.publicState,v.auxState,v.present};
+        };
+        wire.currentLeg=leg(snapshot.currentLeg);wire.pendingLeg=leg(snapshot.pendingLeg);
+        wire.localAmbassador=true;
+        const auto spawn=state::activity::vanilla::one_au::project_spawn({snapshot.spawn.state,snapshot.spawn.opaqueByte,snapshot.spawn.opaqueValue});
+        wire.spawn={spawn.state,spawn.token,spawn.value};
+    }
+    const auto homecomingTransit=state::activity::vanilla::homecoming::transit::project(activity,
+        state::activity::mission_run_generation(),snapshot.identity.memberKey,
+        name=="mission_towerfall" && layout.tag==state::activity::vanilla::homecoming::kScenario,nativeTransit);
+    if(homecomingTransit.publish) {terminal=homecomingTransit;}
+    if(name=="mission_towerfall" && layout.tag==state::activity::vanilla::homecoming::kScenario) {
+        const auto leg=[](const auto& v) {
+            return middleware::bap::activity_message::replicate_membership::RegionLeg{
+                v.sliceSetIndex,v.sliceSetHash,v.regionIndex,v.publicState,v.auxState,v.present};
+        };
+        wire.currentLeg=leg(snapshot.currentLeg);wire.pendingLeg=leg(snapshot.pendingLeg);
+        wire.localAmbassador=true;
+    }
+    const auto adieuTransit=state::activity::vanilla::adieu::transit::project(activity,
+        state::activity::mission_run_generation(),snapshot.identity.memberKey,
+        name=="mission_journey" && layout.tag==state::activity::vanilla::adieu::kScenario,nativeTransit);
+    if(adieuTransit.publish) {terminal=adieuTransit;}
+    if(name=="mission_journey" && layout.tag==state::activity::vanilla::adieu::kScenario) {
+        const auto leg=[](const auto& v) {
+            return middleware::bap::activity_message::replicate_membership::RegionLeg{
+                v.sliceSetIndex,v.sliceSetHash,v.regionIndex,v.publicState,v.auxState,v.present};
+        };
+        wire.currentLeg=leg(snapshot.currentLeg);wire.pendingLeg=leg(snapshot.pendingLeg);
+        wire.localAmbassador=true;
     }
     if(terminal.publish) {
         wire.teleport={terminal.host.state,terminal.host.token,terminal.host.sliceSetIndex,

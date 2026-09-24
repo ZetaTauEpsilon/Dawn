@@ -16,4 +16,21 @@ inline bool source(std::span<const std::byte> b,bool dialogue) noexcept {
         && read<std::int64_t>(b,0x50)==0;
 }
 void observe_directive(void*) noexcept;
+// Release 272AE0: acknowledge only one exact visible native banner.
+inline std::uint32_t visible_row(std::span<const std::byte> b,std::span<const std::byte> banners,const mission::Frame& f) noexcept {
+    if(!source(b,false) || b.size()<0x480 || banners.size()<0x1488 || !f.enabled || f.finished
+        || !f.presentation.active || !f.presentation.published)return UINT32_MAX;
+    const auto index=read<std::uint32_t>(b,0x478);if(index>=3)return UINT32_MAX;
+    const auto row=0x190+index*0xF8;
+    if(read<std::uint32_t>(b,row)!=f.presentation.event || read<std::uint32_t>(b,row+4)!=0 || read<std::uint8_t>(b,row+8)!=0)return UINT32_MAX;
+    const auto count=read<std::uint64_t>(banners,0x1480);if(count>16)return UINT32_MAX;unsigned matches{};
+    for(std::size_t i=0;i<count;++i) {
+        const auto p=i*0x148;
+        if(read<std::uint8_t>(banners,p)!=2 || read<std::uint32_t>(banners,p+4)!=f.presentation.event*0x502C3F11U)continue;
+        if(read<std::uint32_t>(banners,p+8)!=0xF995E43A || read<std::uint32_t>(banners,p+16)!=0x77852DB9
+            || read<std::uint64_t>(banners,p+0x110)!=1 || read<std::int32_t>(banners,p+0x70)<0 || read<std::int32_t>(banners,p+0x70)>1)return UINT32_MAX;
+        ++matches;
+    }
+    return matches==1?index:UINT32_MAX;
+}
 }

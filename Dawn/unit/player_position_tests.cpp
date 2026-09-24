@@ -51,6 +51,8 @@ namespace deep_storage { void observe_position(float x,float y,float z) noexcept
 namespace hijacked { void observe_position(float x,float y,float z) noexcept {++hijackedPublications;hijackedPosition={x,y,z};} }
 namespace strike_bond { void observe_position(float x,float y,float z) noexcept {++gardenPublications;gardenPosition={x,y,z};} }
 namespace beyond_infinity { void observe_position(float,float,float) noexcept {} }
+namespace vanilla::one_au { void observe_position(float,float,float) noexcept {} void observe_native_player(std::uint32_t) noexcept {} }
+namespace vanilla::homecoming { void observe_position(float,float,float) noexcept {} }
 namespace deadly_trial { void observe_position(float x,float y,float z) noexcept { ++trialPublications;trialPosition={x,y,z}; } }
 namespace gateway { void observe_position(float x,float y,float z) noexcept { ++publications;if(mission) { mission->position(1,{x,y,z}); } } }
 namespace omega_presentation { void observe_position(Point) noexcept {} Navigation navigation() noexcept { return {}; } }

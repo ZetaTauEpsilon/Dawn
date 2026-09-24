@@ -7,7 +7,7 @@ using Flag = bool(__fastcall*)(int);
 using SetFlag = void(__fastcall*)(int,bool);
 using ActiveIndex = void*(__fastcall*)(std::int16_t*);
 using Leave = void(__fastcall*)(std::int32_t,std::int32_t);
-bool gateway_video_poll(std::uintptr_t base,std::int32_t step) noexcept {
+bool gateway_video_poll(std::uintptr_t base,std::int32_t step,bool homecoming=false) noexcept {
     const auto manager=resolve<VideoManager>(base,0x41B040,{0x48,0x8D,0x05,0xB9,0x15,0xB7,0x01,0xC3});
     const auto playing=resolve<VideoPlaying>(base,0x41B420,{0x48,0x83,0xEC,0x28,0x83,0x79,0x58,0xFF});
     const auto flag=resolve<Flag>(base,0x1764D20,{0x40,0x53,0x48,0x83,0xEC,0x20,0x8B,0xD9});
@@ -15,7 +15,9 @@ bool gateway_video_poll(std::uintptr_t base,std::int32_t step) noexcept {
     if(!manager || !playing || !flag || !index) return false;
     std::int16_t selected{-1};
     if(step==39) index(&selected);
-    intro::video(step,selected,step==39 && playing(manager()),step==39 && flag(8),now());
+    const bool active=step==39 && playing(manager()),finished=step==39 && flag(8);
+    if(homecoming) state::activity::vanilla::homecoming::prologue::video(step,selected,active,finished,now());
+    else intro::video(step,selected,active,finished,now());
     return true;
 }
 bool gateway_video_reset(std::uintptr_t base) noexcept {

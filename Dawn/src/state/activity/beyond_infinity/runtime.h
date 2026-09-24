@@ -6,6 +6,7 @@ Frame snapshot(std::uint64_t run,std::uint64_t now,bool ready) noexcept;
 struct Request { coo::Generation owner{};Frame frame{}; };
 Request request() noexcept;
 void observe_forest_readiness(coo::Generation,std::uint8_t pass,bool ready) noexcept;
+void observe_forest_terminal(coo::Generation,std::uint8_t pass) noexcept;
 struct LensRequest { coo::Generation owner{};LensReceipt lens{};bool enabled{},vulnerable{},destroyed{};std::uint32_t objectGeneration{}; };
 LensRequest lens_request() noexcept;
 struct PlateRequest { coo::Generation owner{};PlateReceipt plate{};std::uint32_t revision{};bool enabled{},occupied{},destroyed{},charged{};server::runtime::activity::mission_capture::Publication capture{}; };

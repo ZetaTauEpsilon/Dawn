@@ -1,4 +1,6 @@
 #include "controller.h"
+#include "lighting.h"
+#include "navigation.h"
 #include <bit>
 #include <cmath>
 
@@ -153,7 +155,7 @@ bool Controller::device(coo::Generation gen,coo::Asset a,const middleware::bap::
     s.generation=next;s.deviceSynchronized=true;++frame_.revision;return true;
 }
 bool Controller::lights(coo::Generation gen,const coo::ObjectReceipt& binding) noexcept {
-    const auto a=asset(kBreach,4,1);
+    const auto a=lighting::kSource;
     if(gen!=owner() || !frame_.enabled || !frame_.lightRequested || frame_.light || !frame_.ghost.atLights
         || binding.source!=a || !binding.valid() || objects_.owner(object_index(a))!=binding) {return false;}
     frame_.light=true;frame_.ghost.release_return();++frame_.revision;return true;
@@ -299,19 +301,7 @@ bool Controller::tower_arrived(coo::Generation gen) noexcept {
     frame_.finished=true;frame_.completion=lifecycle_.publication();++frame_.revision;return true;
 }
 coo::MarkerTarget Controller::marker(std::uint32_t event) const noexcept {
-    const auto navigation=[](std::uint32_t key,std::uint8_t,std::uint16_t slot) noexcept {
-        for(const auto& n:kNavigation) {if(n.asset.registry==key && n.asset.slot==slot) {return n.asset;}}
-        return coo::Asset{};
-    };
-    coo::Asset target{};
-    if(event==kObjectives[1]) {target=navigation(kExterior,47,7);}
-    else if(event==kObjectives[2]) {target=navigation(kBreachRoute,47,17);}
-    else if(event==kObjectives[3]) {target=navigation(kBreachRoute,47,21);}
-    else if(event==kObjectives[4]) {target=navigation(kBreachRoute,47,22);}
-    else if(event==kObjectives[5]) {target=navigation(kDivideRoute,47,8);}
-    else if(event==kObjectives[6] || event==kObjectives[7]) {target=navigation(kDivideRoute,47,7);}
-    else if(event==kObjectives[0] || event==kObjectives[8]) {target=navigation(kHangarRoute,47,8);}
-    return target.registry?coo::MarkerTarget{target,{0x811C9DC5U,0,0,0}}:coo::MarkerTarget{};
+    return navigation::marker(event);
 }
 bool Controller::publish(const coo::Command& c) noexcept {
     const auto& g=graph().definition;
@@ -328,7 +318,7 @@ bool Controller::publish(const coo::Command& c) noexcept {
         if(s.asset==kModule) switch(static_cast<Mechanic>(s.argument)) {
         case Mechanic::next:phaseFinished_=true;return true;
         case Mechanic::light:
-            if(!frame_.ghost.atLights || !request(asset(kBreach,4,1),true)) {return false;}
+            if(!frame_.ghost.atLights || !request(lighting::kSource,true)) {return false;}
             frame_.lightRequested=true;++frame_.revision;return true;
         case Mechanic::shutter:
             return frame_.light && frame_.ghost.ready() && request(asset(kBreach,23,75),true,1.F);

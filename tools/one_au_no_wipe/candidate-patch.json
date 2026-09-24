@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "candidate": "0.1.3-1au-fix",
+  "release": "0.1.3-1au-no-wipe",
+  "size": 26295296,
+  "originalSha256": "be08e2a8b73f661fe291998f6ac6b3f36838dfa4bcab9f28f24d5e0d43779f0f",
+  "patchedSha256": "ea5de3644dc5e7436393f8aa81297ad14f7cb970939975de37891ed8feb48c71",
+  "ranges": [
+    {
+      "description": "1AU individual respawns retain three seconds in darkness",
+      "rva": 2567466,
+      "offset": 2564394,
+      "before": "7405",
+      "after": "eb05"
+    },
+    {
+      "description": "Escape timer expiry no longer requests checkpoint recovery",
+      "rva": 5559158,
+      "offset": 5556086,
+      "before": "0f8226010000",
+      "after": "e92701000090"
+    },
+    {
+      "description": "Dead player skips only the 1AU wipe-start block",
+      "rva": 5595404,
+      "offset": 5592332,
+      "before": "0f85ae000000",
+      "after": "0f856c010000"
+    }
+  ]
+}

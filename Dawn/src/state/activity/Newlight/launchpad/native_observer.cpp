@@ -2,6 +2,8 @@
 #include "runtime.h"
 #include "ghost_native.h"
 #include "lighting_native.h"
+#include "lighting_scene.h"
+#include <intrin.h>
 #include "entrance_native.h"
 #include "cache_native.h"
 #include "shutter_native.h"
@@ -24,6 +26,8 @@ coo::Generation shutterOwner{};
 shutter::Physical physicalShutter{};
 std::array<shutter::Physical,8> shutterCandidates{};
 std::uintptr_t shutterGate{};
+coo::Generation lightingOwner{};
+lighting::scene::Binding lightingScene{};
 template<class T> T at(const std::byte* bytes) noexcept {T v{};std::memcpy(&v,bytes,sizeof v);return v;}
 std::uintptr_t image() noexcept {return reinterpret_cast<std::uintptr_t>(GetModuleHandleW(nullptr));}
 void poll_shutter(const Request& req) noexcept {
@@ -76,6 +80,57 @@ void observe_native_shutter_gate(void* raw) noexcept {
     const std::lock_guard lock(mutex);
     if(shutterOwner!=owner) {shutterOwner=owner;physicalShutter={};shutterCandidates={};}
     shutterGate=source;
+}
+void observe_native_lighting_scene(void* raw) noexcept {
+    const auto owner=native_owner();if(!owner.valid()) {return;}
+    lighting::scene::Binding known{};
+    {const std::lock_guard lock(mutex);if(lightingOwner==owner) {known=lightingScene;}}
+    gn::Read cached{image()};std::uintptr_t resolved{};
+    if(known.address==reinterpret_cast<std::uintptr_t>(raw)
+        && cached.weak(known.entity) && cached.weak(known.device)
+        && cached.resolve(known.device.handle,resolved) && resolved==known.address) {return;}
+    gn::Read read{image()};lighting::scene::Binding binding{};
+    if(!lighting::scene::capture(read,reinterpret_cast<std::uintptr_t>(raw),binding)
+        || native_owner()!=owner) {return;}
+    {const std::lock_guard lock(mutex);lightingOwner=owner;lightingScene=binding;}
+}
+void apply_native_lighting_switch(void* raw,float requested,char snap) noexcept {
+    const auto source=reinterpret_cast<std::uintptr_t>(raw),base=image();
+    const auto command=lighting_scene_command();if(!command.owner.valid()) {return;}
+    gn::Read receipt{base};
+    if(!lighting::scene::accepted_switch(receipt,source,command.revision,requested,snap)) {return;}
+    lighting::scene::Binding remembered{},before{};
+    {const std::lock_guard lock(mutex);if(lightingOwner!=command.owner) {return;}remembered=lightingScene;}
+    gn::Read refresh{base};
+    if(!lighting::scene::refresh(refresh,remembered,before)) {return;}
+    const auto address=before.address;
+    gn::Read early{base};
+    if(!lighting::scene::pending(early,address)) {return;}
+    // We are returning from the accepted logical switch's native setter, inside
+    // its event job. Still validate TLS; never manufacture a simulation context.
+    if(!lighting::simulation_context(early,base,__readgsqword(0x58))) {return;}
+    constexpr std::array<std::uint8_t,16> prefix{0x40,0x53,0x48,0x83,0xEC,0x60,0x0F,0xB7,
+        0x41,0x2C,0x4C,0x8B,0xD2,0x25,0xFF,0x1F};
+    std::array<std::uint8_t,16> actual{};
+    if(!early.value(base+0xDF6510,actual) || actual!=prefix) {return;}
+    gn::Read first{base};lighting::scene::Binding checked{};
+    if(!lighting::scene::capture(first,address,checked) || checked!=before) {return;}
+    gn::Read second{base};
+    if(lighting_scene_command()!=command || !lighting::scene::capture(second,address,checked)
+      || checked!=before || !lighting::scene::pending(second,address)) {return;}
+    const auto record=lighting::position_record(command.revision);
+    // Same narrow authority admission as the placed rifle shutters. The native
+    // consumer owns position, dirty notification, sound, scene time and curves.
+    auto* authority=reinterpret_cast<volatile LONG*>(base+0x26BE0E0+4U*((before.entity.handle&0x1FFFU)/32U));
+    InterlockedOr(authority,static_cast<LONG>(1U<<(before.entity.handle&31U)));
+    using Apply=void(__fastcall*)(void*,const void*);
+    reinterpret_cast<Apply>(base+0xDF6510)(reinterpret_cast<void*>(address),record.data());
+    gn::Read after{base};std::int32_t revision{},immediate{};float target{};
+    if(after.value(address+0x960,revision) && revision==static_cast<std::int32_t>(command.revision)
+        && after.value(address+0x964,immediate) && immediate==-1 && after.value(address+0x37C,target) && target==1.F) {
+        core::log::write(core::log::Channel::client,core::log::Level::info,
+            "ev=launchpad stage=authored_light_scene result=native_rising_edge device=80FA2F0A sound=m0_lighting_spectacle snap=0");
+    }
 }
 void observe_native_object(void* raw) noexcept {
     const auto req=request();if(!req.frame.enabled) {return;}
@@ -181,7 +236,7 @@ void poll_native_objects() noexcept {
         gn::Read first{image()};
         const auto revision=req.frame.native[asset_index(lighting::kSource)].generation;
         const unsigned status=!source?1:!lighting::sample(first,image(),source,req,before)?3
-            :before.target!=1.F || before.revision!=static_cast<std::int32_t>(revision)?4:0;
+            :!lighting::accepted(revision,before.revision,before.current,before.target)?4:0;
         static coo::Generation lightOwner{};static unsigned previous{UINT_MAX};
         if(lightOwner!=req.owner || previous!=status) {
             lightOwner=req.owner;previous=status;const auto& wanted=req.frame.native[asset_index(lighting::kSource)];

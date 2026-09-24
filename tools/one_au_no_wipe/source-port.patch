@@ -1,0 +1,158 @@
+diff --git a/Dawn/src/middleware/bap/activity_message/activity_sensor_auth_bodies_other_missions.cpp b/Dawn/src/middleware/bap/activity_message/activity_sensor_auth_bodies_other_missions.cpp
+index 55b427a..419775a 100644
+--- a/Dawn/src/middleware/bap/activity_message/activity_sensor_auth_bodies_other_missions.cpp
++++ b/Dawn/src/middleware/bap/activity_message/activity_sensor_auth_bodies_other_missions.cpp
+@@ -216,10 +216,10 @@ constexpr std::size_t kSpawnKeyCount = 32;
+            && writer.write(1, kPresenceWidth)
+            && writer.write(snapshot.awaitClientSync ? kAwaitingClientSync : 0U, 4)
+            && writer.write(0, 1) && writer.write(snapshot.one_au.enabled || snapshot.nativeRespawnRestricted ? 1U : 0U, 1);
+-    // Same optional half-float revive delay used by 1AU-UnEx. The three-second wipe
+-    // precedes this thirty-second delay; ordinary participation stays byte-identical.
++    // 1AU keeps its three-second individual respawn delay even when the darkness
++    // presentation is active. Other restricted activities retain thirty seconds.
+     if(snapshot.one_au.enabled || snapshot.nativeRespawnRestricted)
+-        encoded=encoded && writer.write(snapshot.one_au.enabled && !snapshot.one_au.restricted ? 0x4200U : 0x4F80U,16);
++        encoded=encoded && writer.write(snapshot.one_au.enabled ? 0x4200U : 0x4F80U,16);
+     return encoded && writer.write(0,1) && writer.write(0,kPresenceWidth) && writer.write(128,8)
+            && writer.write(kSignedZero,32);
+ }
+diff --git a/Dawn/src/state/activity/vanilla/one_au/controller.cpp b/Dawn/src/state/activity/vanilla/one_au/controller.cpp
+index 22fa9e4..0b21942 100644
+--- a/Dawn/src/state/activity/vanilla/one_au/controller.cpp
++++ b/Dawn/src/state/activity/vanilla/one_au/controller.cpp
+@@ -66,15 +66,14 @@ bool Controller::cinematic(coo::Generation gen,const cinematics::Incident& e,std
+     const bool accepted=cinematics_.incident(gen,e.target,e.registry,e.type,e.slot,e.runtime,now);
+     if(accepted) {frame_.cinematic=cinematics_.state();++frame_.revision;}return accepted;
+ }
+-void Controller::life(coo::Generation gen,std::uint32_t entity,bool alive,std::uint64_t now) noexcept {
++void Controller::life(coo::Generation gen,std::uint32_t entity,bool alive,std::uint64_t) noexcept {
+     if(gen!=owner() || entity==UINT32_MAX || frame_.cinematic.phase!=cinematics::Phase::gameplay || frame_.finished) {return;}
+     if(alive) {
+         livingPlayer_=entity;
+         if(frame_.recovery.phase==recovery::Phase::countdown) {frame_.recovery={};++frame_.revision;}
+-    } else if(entity==livingPlayer_ && frame_.restricted && !frame_.recovery.active()) {
+-        frame_.recovery={};frame_.recovery.phase=recovery::Phase::countdown;frame_.recovery.point=recovery::checkpoint(frame_.section);
+-        frame_.recovery.deadline=now+recovery::kCountdownMs;++frame_.revision;
+     }
++    // Darkness is presentation only. Native individual respawns preserve the
++    // current encounter; a player death must never begin checkpoint recovery.
+ }
+ void Controller::restore_checkpoint(std::uint64_t now) noexcept {
+     const auto old=frame_;const auto run=run_;const auto clock=clock_;reset();
+@@ -694,9 +693,8 @@ bool Controller::advance(std::uint64_t run,std::uint64_t now,bool ready) noexcep
+         if(!frame_.escapeClock && !frame_.escapeStopped) {frame_.escapeClock=true;frame_.escapeStart=now;}
+         if(frame_.escapeClock) {
+             frame_.escapeElapsed=now>=frame_.escapeStart?now-frame_.escapeStart:0;
+-            if(frame_.escapeElapsed>=60000) {
+-                frame_.recovery={};frame_.recovery.phase=recovery::Phase::requested;frame_.recovery.point=recovery::checkpoint(frame_.section);frame_.restricted=true;++frame_.revision;
+-            }
++            // Keep the escape timer as presentation without resetting progress
++            // when it expires. Reaching the exit still ends the timed objective.
+         }
+     }
+     if(frame_.recovery.holding()) {objectives_.clear();hazards();frame_.presentation=objectives_.state();return true;}
+diff --git a/Dawn/unit/one_au_tests.cpp b/Dawn/unit/one_au_tests.cpp
+index 39ae3b3..c47617c 100644
+--- a/Dawn/unit/one_au_tests.cpp
++++ b/Dawn/unit/one_au_tests.cpp
+@@ -83,6 +83,53 @@ static void receipts() {
+         "production actor parser preserves transport receipts");
+     check(!m::actor_output({}).hasGeneration,"absent actor revision stays absent");
+ }
++static void no_wipes() {
++    namespace bits=dawn::middleware::encoding::bits;
++    for(unsigned section=0;section<static_cast<unsigned>(m::Section::count);++section) {
++        for(const bool restricted:{false,true}) {
++            auto controller=std::make_unique<m::Controller>();
++            check(controller->select(91,0),"no-wipe fixture selects mission");
++            const auto owner=controller->owner();const auto movie=m::cinematics::kMovies[0];
++            check(controller->arrival(owner,1,10)
++                && controller->cinematic(owner,{5239,movie.registry,1,6,0},20)
++                && controller->cinematic(owner,{1685,movie.registry,2,6,0},30)
++                && controller->arrival(owner,4,40),"no-wipe fixture reaches gameplay");
++            // Model a later encounter without bypassing the actual death,
++            // update, spawn-handshake or authority publication functions.
++            auto& frame=const_cast<m::Frame&>(controller->frame());
++            frame.section=static_cast<std::uint8_t>(section);frame.restricted=restricted;
++            frame.interactions[0].completed=true;frame.native[0].generation=777;
++            controller->life(owner,0xA0002001U,true,100);
++            for(const auto time:{std::uint64_t{101},std::uint64_t{5000},std::uint64_t{65000}}) {
++                controller->life(owner,0xA0002001U,false,time);
++                check(controller->advance(91,time,true),"mission advances after individual death");
++                check(!frame.recovery.active() && frame.wipeRemaining==0,
++                    "death and escape timeout never request a wipe");
++                check(frame.section==section && frame.spawnGeneration==owner.value
++                    && frame.interactions[0].completed && frame.native[0].generation==777,
++                    "death preserves encounter progress and native generations");
++                const auto spawn=controller->spawn({0,29,0x12345678},time);
++                check(spawn.state==0 && spawn.token==29 && spawn.value==0x12345678,
++                    "individual death does not initiate checkpoint spawn handshake");
++                std::array<std::byte,64> data{};bits::Writer writer(data);
++                check(m::write_body(writer,frame,0x4786C0E0U,35,1) && writer.bit_count()==359,
++                    "darkness authority retains native wire shape");
++                bits::Reader reader(data);std::uint64_t value{};
++                check(reader.read(1,value) && value==(restricted?1U:0U),
++                    "darkness presentation remains enabled for restricted encounters");
++                check(reader.skip(3) && reader.read(3,value) && value==0,
++                    "darkness authority publishes no wipe countdown or activation");
++            }
++            controller->life(owner,0xA0002002U,true,65001);
++            controller->life(owner,0xA0002002U,false,65002);
++            check(!frame.recovery.active(),"a respawned player can die again without a wipe");
++            if(section==static_cast<unsigned>(m::Section::escape)) {
++                check(frame.escapeClock && frame.escapeElapsed>=60000,
++                    "escape timer continues presentation after expiry without recovery");
++            }
++        }
++    }
++}
+ static void ghost_packets() {
+     namespace bits=dawn::middleware::encoding::bits;
+     for (const bool root : {false,true}) {
+@@ -147,7 +194,7 @@ int main() {
+     controller->reset();check(!controller->frame().enabled && !controller->owner().valid(),"reset retires mission authority");
+     check(controller->select(1,100) && controller->owner()!=owner,"replayed run gets a fresh authority generation");
+     check(!controller->arrival(owner,1,110),"retired run receipts cannot activate new attempt");
+-    cinematics();recovery();receipts();ghost_packets();bridge_test::run();
++    cinematics();recovery();no_wipes();receipts();ghost_packets();bridge_test::run();
+     m::VentCycle cycle;
+     check(cycle.sample(0)==m::VentCycle::Phase::idle && cycle.sample(250)==m::VentCycle::Phase::charging
+         && cycle.sample(10000)==m::VentCycle::Phase::windup && cycle.sample(13000)==m::VentCycle::Phase::surging
+diff --git a/Dawn/unit/other_mission_protocol_tests.cpp b/Dawn/unit/other_mission_protocol_tests.cpp
+index c3a1d6a..8d73694 100644
+--- a/Dawn/unit/other_mission_protocol_tests.cpp
++++ b/Dawn/unit/other_mission_protocol_tests.cpp
+@@ -80,11 +80,33 @@ void check_gameplay_clock_transport() {
+             "archive Omega ignores non-archive gameplay clock field");
+     }
+ }
++void check_one_au_respawns() {
++    for(const bool oneAu:{false,true}) for(const bool darkness:{false,true})
++        for(const bool otherRestriction:{false,true}) {
++            wire::Snapshot snapshot{};snapshot.one_au.enabled=oneAu;
++            snapshot.one_au.restricted=darkness;snapshot.nativeRespawnRestricted=otherRestriction;
++            std::array<std::byte,4096> packet{};bits::Writer writer(packet);
++            check(wire::write_auth_body(writer,snapshot,0x4786C0E0U,13,0,true),
++                "participation body encodes respawn policy");
++            const bool hasDelay=oneAu || otherRestriction;
++            bits::Reader reader(packet);std::uint64_t value{};
++            // The last 42 bits are fixed participation fields after the delay.
++            check(reader.skip(writer.bit_count()-42-(hasDelay?16:0)-1)
++                && reader.read(1,value) && value==(hasDelay?1U:0U),
++                "optional revive delay presence retains wire alignment");
++            if(hasDelay) check(reader.read(16,value) && value==(oneAu?0x4200U:0x4F80U),
++                "1AU always allows three-second respawns; other restricted missions retain thirty seconds");
++            check(reader.read(1,value) && value==0 && reader.read(1,value) && value==0
++                && reader.read(8,value) && value==128 && reader.read(32,value) && value==0x80000000U,
++                "respawn change leaves following participation fields unchanged");
++        }
++}
+ #endif
+ 
+ int main() {
+ #ifdef OMEGA_PORT_LOCAL
+     check_gameplay_clock_transport();
++    check_one_au_respawns();
+ #endif
+     // A Tower Watch publication must retain its original single dialogue record
+     // and target-free directive even if unrelated Omega fields are populated.

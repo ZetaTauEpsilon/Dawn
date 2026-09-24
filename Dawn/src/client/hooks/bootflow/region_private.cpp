@@ -9,6 +9,7 @@
 #include "../../../core/logging/log.h"
 #include "../../../core/settings/settings.h"
 #include "../../../state/activity/forced/activity_forced_destination.h"
+#include "../../../state/activity/vanilla/homecoming/runtime.h"
 #include "../../hooking/detour.h"
 #include "internal.h"
 
@@ -128,7 +129,11 @@ __declspec(noinline) bool __fastcall reader(std::uint32_t sliceSet) noexcept {
     if (caller != g_returnSite.load(std::memory_order_acquire)) {
         return true;
     }
-    const bool forced = core::settings::get().client.regionPrivate;
+    // Homecoming's plaza is an authored public bubble inside a private mission. Its
+    // slice-set switch would wait for a public activity host that never connects, so
+    // the native run always reports it private (no setting can leave it public).
+    const bool forced = core::settings::get().client.regionPrivate
+        || state::activity::vanilla::homecoming::native_run() != 0;
     report(sliceSet, forced);
     return !forced;
 }

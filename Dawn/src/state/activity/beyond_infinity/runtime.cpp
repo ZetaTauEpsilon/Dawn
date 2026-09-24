@@ -94,6 +94,10 @@ void observe_forest_readiness(coo::Generation owner,std::uint8_t pass,bool ready
     if(forestObservation.owner==owner && forestObservation.pass==pass && forestObservation.ready==ready)return;
     forestObservation={owner,pass,ready,true};nextPublication=0;
 }
+void observe_forest_terminal(coo::Generation owner,std::uint8_t pass) noexcept {
+    const std::lock_guard lock(mutex);
+    if(current())static_cast<void>(controller.forest_terminal(owner,pass));
+}
 Request request() noexcept {
     const std::lock_guard lock(mutex);return current()?Request{controller.owner(),controller.frame()}:Request{};
 }

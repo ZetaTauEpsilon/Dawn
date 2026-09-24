@@ -18,6 +18,8 @@
 *.exe
 *.dll
 *.obj
+# Pinned historical hotfix input, required by its reproducible package recipe.
+!/tools/one_au_hotfix/activity-script.obj
 *.pdb
 *.ilk
 *.exp
@@ -44,6 +46,7 @@
 /Dawn/settings.json
 /Dawn/hud.json
 /Dawn/movement.json
+/Dawn/camera.json
 /Dawn/player.json
 __pycache__/
 *.py[cod]

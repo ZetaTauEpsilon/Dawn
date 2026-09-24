@@ -8,9 +8,11 @@
 
 Install a packaged release over an existing game installation using the bundled Dawn installer.
 
-**[Download the installer ZIP — 0.1.3](https://github.com/isinternets/Dawn/releases/download/v0.1.3/Dawn-0.1.3.zip)**
+**[Download the installer ZIP — 0.1.5.1](https://github.com/isinternets/Dawn/releases/download/v0.1.5.1/Dawn-0.1.5.1.zip)**
 
-[Release notes and checksum](https://github.com/isinternets/Dawn/releases/tag/v0.1.3)
+[Release notes and checksum](https://github.com/isinternets/Dawn/releases/tag/v0.1.5.1)
+
+**Preview: [Dawn 1.7 Preview 1 — Adieu, Homecoming, and mission guidance](https://github.com/isinternets/Dawn/releases/tag/v1.7-preview.1)**
 
 </div>
 
@@ -34,12 +36,12 @@ Players do not need Visual Studio, Python, Lua, or a source checkout.
 
 ### If you want to play
 
-Download **[Dawn-0.1.3.zip](https://github.com/isinternets/Dawn/releases/download/v0.1.3/Dawn-0.1.3.zip)**
-from the [GitHub release](https://github.com/isinternets/Dawn/releases/tag/v0.1.3). Under
+Download **[Dawn-0.1.5.1.zip](https://github.com/isinternets/Dawn/releases/download/v0.1.5.1/Dawn-0.1.5.1.zip)**
+from the [GitHub release](https://github.com/isinternets/Dawn/releases/tag/v0.1.5.1). Under
 **Assets**, choose that named installer ZIP. GitHub's automatically generated **Source code**
 archives contain the source checkout and do not include the installable payload.
 
-Version 0.1.3 includes performance and mission fixes, persistent game settings, and an updater that keeps existing saves. Read the release notes before installing. Extract the entire installer
+Version 0.1.5.1 fixes Gateway's final cannon activation and includes rebindable camera controls, file logging by default, and a standalone uninstaller. The updater keeps existing saves and settings. Read the release notes before installing. Extract the entire installer
 ZIP into its own folder. Before running anything, check that the extracted folder contains:
 
 ```text
@@ -48,6 +50,8 @@ Dawn-<release>/
   Install-Dawn.ps1
   Update-Dawn.cmd
   Update-Dawn.ps1
+  Uninstall-Dawn.cmd
+  Uninstall-Dawn.ps1
   READ-ME.txt
   release.json
   payload/
@@ -87,6 +91,8 @@ tools/install/
     Install-Dawn.ps1
     Update-Dawn.cmd
     Update-Dawn.ps1
+    Uninstall-Dawn.cmd
+    Uninstall-Dawn.ps1
     READ-ME.txt
     README.md
 ```
@@ -178,6 +184,26 @@ From PowerShell in the extracted release folder, replace `D:\Dawn` with your gam
 This validates the package and installation and shows the intended changes without changing your
 game files or display preferences. Omit `-WhatIf` to install.
 
+## Uninstall Dawn
+
+Close Destiny 2, then double-click
+[`Uninstall-Dawn.cmd`](tools/install/release/Uninstall-Dawn.cmd) and enter the game
+folder. Keep `Uninstall-Dawn.ps1` beside the launcher; no release payload is needed.
+Newly packaged releases include both files.
+
+The uninstaller **permanently deletes all Dawn saves, settings, caches, and
+backups**, including both Dawn runtime folders and the entire `.dawn` directory.
+It restores original Steam DLLs when found in your backups before deleting those
+backups. If none are available, it reports the missing DLLs to recover from your
+original game backup before launching. Original game files and native
+graphics/key-binding preferences remain intact. No uninstall backup is kept.
+
+Preview from PowerShell with:
+
+```powershell
+.\tools\install\release\Uninstall-Dawn.ps1 -GameRoot "D:\Games\Destiny 2" -WhatIf
+```
+
 ## Backups and rollback
 
 Each installation keeps its backup under:
@@ -209,22 +235,26 @@ reported backup path with `-Restore` before trying another installation.
 
 ## Loadout studio
 
-Open **Loadout** in the in-game menu to edit your character and equipment. The native editor adapts
-Sundial's catalog, perk selection, localization, and preview layouts to Dawn's account storage.
-Parhelion is not required.
+Open **Loadout** in the in-game menu to edit your character and equipment. Click an item to edit
+it in the side panel. See [Sundial](#sundial) under Acknowledgements for what Dawn adapts from it.
 
-- Edit character identity, progression, equipment, subclasses, and character/account inventories.
-- Choose ability combinations for all nine subclasses, including trees, jumps, grenades, and
-  class abilities.
-- Browse weapons, armor, cosmetics, and perks with names and preview artwork from your installed
-  game packages. Search, filter by rarity or type, and sort the collection.
-- Give and equip items, adjust power and quantities, lock items, edit sockets, and randomize
-  selected equipment slots. Expanded perk scopes allow unconventional combinations.
+- Edit character identity, progression, equipment, subclasses, and inventories.
+- Choose a subclass and attunement, which sets the super and melee, plus jump, grenade, and class
+  ability.
+- Browse weapons, armor, cosmetics, perks, and materials with artwork and descriptions from your
+  packages.
+- Give, equip, lock, and randomize items; set power and quantities; edit sockets, with wider perk
+  scopes for unconventional combinations.
+- Drag an armor stat bar to set a target. Letting go rolls the closest spread the game ships.
 
-Changes remain in a draft until **Save changes**. Saving creates a backup in `Dawn/editor-backups`
-and checks inventory limits and whether the account changed while you were editing.
-**Restart the game after saving** to load the edited account. Reload asks before discarding an
-unsaved draft. Inventory capacity and one exotic per gear category are preserved.
+Edits apply to the running game, with no restart. **Apply live** is on by default. Turn it off to
+build a draft and commit it with **Apply**, or discard it with **Reload**. The editor checks
+inventory limits, one exotic per gear category, and whether the game changed the account under
+you. The first apply of a session backs up your player database to `Dawn/editor-backups`.
+
+Most edits show up in game within a moment. Character identity is committed straight away, but
+the Guardian you are playing may keep its look until you sign in again. Changing class needs
+matching armor and a subclass before it applies.
 
 ## Missions
 
@@ -275,7 +305,7 @@ tools. These requirements do not apply to players installing a release ZIP.
 From PowerShell:
 
 ```powershell
-git clone --branch codex/production https://github.com/isinternets/Dawn.git dawn
+git clone --branch production https://github.com/isinternets/Dawn.git dawn
 cd dawn
 & "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\MSBuild\Current\Bin\amd64\MSBuild.exe" `
   Dawn/Dawn.vcxproj /p:Configuration=Release /p:Platform=x64 `
@@ -338,7 +368,9 @@ the character and inventory editor, full perk selection, item-artwork research, 
 and armor-stat tools that informed Dawn's native loadout integration.
 
 Dawn adapts Sundial's localized investment string and icon readers, class-restriction hash lists,
-subclass ability displays and path selection, and five plug-selection scopes. Those adaptations
+subclass ability displays and attunement selection, five plug-selection scopes, the armor-stat
+allocation socket model, and the finished sandbox-perk catalog layout that supplies mod
+descriptions and perk liveness. Those adaptations
 are distributed under **GPL-3.0-only**. The pinned upstream revision, attribution, and license are
 included in [NOTICE.md](Dawn/vendor/sundial/NOTICE.md) and the
 [Sundial license](Dawn/vendor/sundial/LICENSE).

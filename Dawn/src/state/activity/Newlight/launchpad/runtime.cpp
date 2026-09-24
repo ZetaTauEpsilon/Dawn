@@ -3,6 +3,7 @@
 #include "runtime.h"
 #include "../../gateway_intro.h"
 #include "entry.h"
+#include "lighting.h"
 #include "../../runtime.h"
 #include "../../../../core/logging/log.h"
 #include "../../../../client/hooks/bootflow/gateway_native_read.h"
@@ -155,6 +156,15 @@ void observe_object(const coo::ObjectReceipt& r) noexcept {const std::lock_guard
 void observe_lights(coo::Generation owner,const coo::ObjectReceipt& r) noexcept {
     const std::lock_guard lock(mutex);
     if(current() && controller.lights(owner,r)) {log("ev=launchpad stage=lights result=native_position_accepted");}
+}
+LightingSceneCommand lighting_scene_command() noexcept {
+    const std::lock_guard lock(mutex);
+    if(!current()) {return {};}
+    const auto& frame=controller.frame();const auto& source=frame.native[asset_index(lighting::kSource)];
+    if(!frame.enabled || !frame.lightRequested || frame.cinematic.ending()
+        || !source.managed || !source.active || !source.prepared
+        || !source.generation || source.generation>=0x7FFFFFFFU) {return {};}
+    return {controller.owner(),source.generation};
 }
 void observe_device(std::uint32_t key,std::uint8_t type,std::uint16_t slot,const middleware::bap::activity_message::device_sense::Output& d) noexcept {const std::lock_guard lock(mutex);if(current()) {static_cast<void>(controller.device(controller.owner(),asset(key,type,slot),d));}}
 void observe_actor(std::uint32_t key,std::uint8_t type,std::uint16_t slot,const middleware::bap::activity_message::combatant_sense::Output& d) noexcept {const std::lock_guard lock(mutex);if(current()) {controller.actor(controller.owner(),asset(key,type,slot),d);}}

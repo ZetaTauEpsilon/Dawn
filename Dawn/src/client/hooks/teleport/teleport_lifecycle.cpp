@@ -18,6 +18,7 @@
 #include "../bootflow/bootflow_hook_lifecycle.h"
 #include "../graphics/hijacked_frame_timing.h"
 #include "../fly/fly.h"
+#include "../camera/runtime.h"
 #include "../polled_input/runtime.h"
 #include "../sword_skate/sword_skate.h"
 #include "internal.h"
@@ -93,6 +94,7 @@ __declspec(noinline) std::int64_t __fastcall camera_transform(std::uint32_t play
     force_pending();
     // Read here, not on the physics tick: that tick stops for a player who is standing still.
     hooks::fly::poll_toggle();
+    hooks::camera::poll_toggle(playerIndex);
     client::player::position::poll();
     hooks::bootflow::poll_world_step();
     return result;

@@ -3,6 +3,7 @@
 #include "state/activity/membership/transactions/internal.h"
 #include "middleware/encoding/bit_writer.h"
 #include "middleware/encoding/bit_reader.h"
+#include "middleware/bap/activity_message/replicate_membership.h"
 #include "server/bap/encrypted/push/activity/native_activity_publisher.h"
 #include "server/bap/encrypted/push/activity/native_roster_lifetime_projection.h"
 #include "server/runtime/activity/mercury_definition.h"
@@ -390,6 +391,48 @@ void open_world_held_region_route() {
 }
 
 int main() {
+    {
+        namespace route=dawn::server::bap::encrypted::activity_message::membership;
+        namespace state=dawn::state::activity::membership;
+        namespace client=dawn::middleware::bap::activity_message::client_authoritative_data;
+        namespace wire=dawn::middleware::bap::activity_message::replicate_membership;
+        client::ClientAuthoritativeData parsed{};
+        parsed.currentLeg={8,0x12345678,64,1,2,true};parsed.pendingLeg={7,0xFEDCBA98,56,0,1,true};
+        parsed.hasRegion=true;parsed.region={56,0xFEDCBA98,true};
+        parsed.hasCurrentRegion=true;parsed.currentRegion={64,0x12345678,true};
+        const auto update=route::make_authoritative(parsed,"mission_ember");
+        CHECK(!route::retains_held_region("mission_ember") && !update.hasCurrentRegion);
+        CHECK(update.currentLeg.present && update.pendingLeg.present);
+        const auto merged=state::transactions::merge({},update);
+        CHECK(merged.region.index==56 && merged.currentLeg.sliceSetHash==0x12345678 && merged.pendingLeg.publicState==0);
+        const auto sparse=state::transactions::merge(merged,route::make_authoritative({},"mission_ember"));
+        CHECK(sparse.currentLeg==merged.currentLeg && sparse.pendingLeg==merged.pendingLeg);
+        const auto snapshot=state::transactions::make_snapshot(sparse,{},7);
+        CHECK(snapshot.currentLeg==merged.currentLeg && snapshot.pendingLeg==merged.pendingLeg);
+        wire::MembershipSnapshot packet{};packet.revision=snapshot.revision;packet.epoch=snapshot.epoch;packet.localAmbassador=true;
+        const auto leg=[](auto v){return wire::RegionLeg{v.sliceSetIndex,v.sliceSetHash,v.regionIndex,v.publicState,v.auxState,v.present};};
+        packet.currentLeg=leg(snapshot.currentLeg);packet.pendingLeg=leg(snapshot.pendingLeg);
+        std::array<std::byte,wire::kMaximumEncodedSize> data{};std::size_t written{};
+        CHECK(wire::encode_replicate_membership(packet,data,written));
+        CHECK(written==wire::encoded_size(packet) && wire::synchronization_bits(packet)==165);
+        bits::Reader reader(std::span(data).first(written));std::uint64_t value{};
+        // Native full local identity ends at bit 732, then D4 and its two legs.
+        CHECK(reader.skip(732) && reader.read(1,value) && value==1);
+        for(const auto v:{packet.currentLeg,packet.pendingLeg}) {
+            CHECK(reader.read(1,value) && value==1);
+            CHECK(reader.read(10,value) && value==static_cast<unsigned>(v.sliceSetIndex+1));
+            CHECK(reader.read(32,value) && value==v.sliceSetHash);
+            CHECK(reader.read(32,value) && value==0x80000000U+static_cast<std::uint32_t>(v.regionIndex));
+            CHECK(reader.read(2,value) && value==static_cast<unsigned>(v.publicState+1));
+            CHECK(reader.read(2,value) && value==static_cast<unsigned>(v.auxState+1));
+            CHECK(reader.read(2,value) && value==0);
+        }
+        const auto legacy=route::make_authoritative(parsed,"mission_launchpad");
+        CHECK(legacy.currentLeg==update.currentLeg && legacy.pendingLeg==update.pendingLeg && legacy.hasCurrentRegion);
+        for(std::string_view name:{"mission_ember_extra","mission_scot",""}) {
+            const auto other=route::make_authoritative(parsed,name);CHECK(!other.currentLeg.present && !other.pendingLeg.present);
+        }
+    }
     open_world_held_region_route();
     scope_transition();invalid_metadata();descriptor_contracts();publisher_cases::run();
     std::printf("PASS %u retained authority scope/actual encoder checks\n",checks);

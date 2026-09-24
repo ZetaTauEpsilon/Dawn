@@ -2,6 +2,7 @@
 #include <bit>
 
 #include "sensor_auth_update.h"
+#include "native/omega_activity_script.h"
 #include "../../../state/activity/coo/native_presentation_authority.h"
 #include "../../../state/activity/coo/native_mission_forest_authority.h"
 #include "../../../state/activity/beyond_infinity/forest_selection.h"
@@ -457,8 +458,11 @@ write_shared_mission_state(bits::Writer& writer, bool active) noexcept {
                                          const Snapshot& snapshot) noexcept {
     // The shared-state head is set in the client storage object. That materializes the datum but
     // does not supply the activity-host executor that advances the authored mission graph.
-    return writer.write(1, kPresenceWidth) && pad_bits(writer, 5 * 64 + 32)
-           && writer.write(snapshot.activityScriptFlag ? 1U : 0U, kPresenceWidth)
+    const bool timeState = snapshot.archiveOmega
+        ? native::omega_activity_script::time_state(writer)
+        : writer.write(1, kPresenceWidth) && pad_bits(writer, 5 * 64 + 32);
+    return timeState
+           && writer.write(!snapshot.archiveOmega && snapshot.activityScriptFlag ? 1U : 0U, kPresenceWidth)
            && writer.write(kSignedZero
                                + static_cast<std::uint32_t>(snapshot.activityScriptState),
                            32);

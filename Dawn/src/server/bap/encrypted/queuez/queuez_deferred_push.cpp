@@ -14,6 +14,8 @@
 #include "../activity_message/forest_loot_pickups.h"
 #include "../push/activity/activity_keepalive_push.h"
 #include "../push/activity/launchpad_inventory.h"
+#include "../push/activity/homecoming_inventory.h"
+#include "../push/activity/adieu_inventory.h"
 #include "../push/activity/newlight_quest.h"
 #include "../push/activity/quest_progress.h"
 #include "../../../../state/activity/nightfall/rules.h"
@@ -317,10 +319,19 @@ bool consume_deferred(Session& session,
         return false;
     }
     if (consume_account_resync(session, scratch, response, written, touchesScratch)) {
+        session.accountResyncFailures = 0;
         return true;
     }
-    // A failed resync remains armed and blocks unrelated deferred output until it can be retried.
+    // A failed resync remains armed and blocks unrelated deferred output until it can be retried,
+    // but not forever: past the limit the arm is dropped and the rest of the output flows again.
     if (session.accountResyncArmed) {
+        if (++session.accountResyncFailures >= kAccountResyncFailureLimit) {
+            session.accountResyncArmed = false;
+            session.accountResyncFailures = 0;
+            core::log::write(core::log::Channel::server,
+                             core::log::Level::warn,
+                             "ev=queuez stage=peer_resync result=abandoned reason=failures");
+        }
         return false;
     }
     if (session.queuez.family4Active
@@ -349,6 +360,8 @@ bool consume_deferred(Session& session,
         return consume_banner_repush(session, scratch, response, written, touchesScratch)
                || push::activity::newlight_quest::consume(session, scratch, response, written, touchesScratch)
                || push::activity::launchpad_inventory::consume(session, scratch, response, written, touchesScratch)
+               || push::activity::homecoming_inventory::consume(session, scratch, response, written, touchesScratch)
+               || push::activity::adieu_inventory::consume(session, scratch, response, written, touchesScratch)
                || push::activity::quest_progress::consume(session, scratch, response, written, touchesScratch)
                || push::activity::consume_activity_keepalive(
                    session, scratch, response, written, touchesScratch);

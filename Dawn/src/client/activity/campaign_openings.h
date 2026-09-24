@@ -33,7 +33,7 @@ inline constexpr auto kOmegaOpening = [] {
     return value;
 }();
 
-inline constexpr std::array<Mission, 11> kMissions{{
+inline constexpr std::array<Mission, 13> kMissions{{
     {"Homecoming", "THE LAST CITY", "Return to the Tower as the Red Legion attacks the Last City.", 0, 266, 0x62D85FB3U, forced::profiles::kTowerfallOpening},
     {"Gateway", "MERCURY", "Follow Ikora to Mercury and begin the search for Osiris.", 1, 292, 0x5A2E3FF4U, forced::profiles::kGatewayOpening},
     {"A Deadly Trial", "EUROPEAN DEAD ZONE", "Track a lead through the EDZ in search of a way into the Infinite Forest.", 1, 293, 0x87D9CA16U, forced::profiles::kDeadlyTrialOpening},
@@ -45,7 +45,41 @@ inline constexpr std::array<Mission, 11> kMissions{{
     {"Omega", "MERCURY", "Return to the Infinite Forest and confront Panoptes with Osiris.", 1, 299, 0x87AC2003U, kOmegaOpening},
     {"Tree of Probabilities", "MERCURY", "Pursue Valus Thuun through the Infinite Forest.", 2, 230, 0x9FFC7326U, forced::profiles::kStrikePactOpening},
     {"A Garden World", "MERCURY", "Climb the spire and defeat Dendron, Root Mind.", 2, 229, 0x99BDAB3DU, forced::profiles::kStrikeBondOpening},
+    {"1AU", "THE ALMIGHTY", "Board the Almighty and disable its weapon before it destroys the Sun.", 0, 281, 0x38F926B2U, forced::profiles::kOneAuOpening},
+    {"Exodus", "THE LAST CITY", "Find Ghost, escape the City, and follow the falcon through the mountains.", 0, 288, 0xB913ED3FU, forced::profiles::kAdieuOpening},
 }};
+
+// Display numbers are campaign positions, not implementation/route indices.
+// Keep those indices stable for queued launches and saved UI selection.
+[[nodiscard]] constexpr unsigned mission_number(std::size_t index) noexcept {
+    if(index>=kMissions.size()) return 0;
+    if(kMissions[index].activity==266) return 1;
+    if(kMissions[index].activity==288) return 2;
+    if(kMissions[index].activity==281) return 16;
+    unsigned ordinal{};
+    for(std::size_t i=0;i<=index;++i) if(kMissions[i].campaign==kMissions[index].campaign) ++ordinal;
+    return ordinal;
+}
+inline constexpr auto kDisplayOrder=[] {
+    std::array<std::size_t,kMissions.size()> order{};
+    for(std::size_t i=0;i<order.size();++i) order[i]=i;
+    for(std::size_t i=1;i<order.size();++i) {
+        const auto value=order[i];auto j=i;
+        while(j && (kMissions[order[j-1]].campaign>kMissions[value].campaign
+            || (kMissions[order[j-1]].campaign==kMissions[value].campaign
+                && mission_number(order[j-1])>mission_number(value)))) {
+            order[j]=order[j-1];--j;
+        }
+        order[j]=value;
+    }
+    return order;
+}();
+
+// Keep existing route indices stable; only the implemented Red War missions are listed.
+[[nodiscard]] constexpr bool listed(const Mission& mission) noexcept {
+    return mission.campaign != 0 || mission.activity == forced::prelaunch::kOneAu.activity
+        || mission.activity == forced::prelaunch::kTowerfall.activity || mission.activity==forced::prelaunch::kAdieu.activity;
+}
 
 struct Route {
     std::uint16_t transport{0xFFFF};

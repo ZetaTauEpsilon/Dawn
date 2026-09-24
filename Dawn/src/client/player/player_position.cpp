@@ -1,3 +1,6 @@
+#include "../../state/activity/vanilla/one_au/runtime.h"
+#include "../../state/activity/vanilla/homecoming/runtime.h"
+#include "../../state/activity/vanilla/adieu/runtime.h"
 #include "../../state/activity/gateway/runtime.h"
 #include "../../state/activity/deadly_trial/runtime.h"
 #include "../../state/activity/beyond_infinity/runtime.h"
@@ -161,6 +164,10 @@ void observe_crown_route(void* component,const teleport::Vector& position) noexc
         const std::lock_guard lock(g_physicsObserverMutex);
         if(g_physicsObserver) g_physicsObserver(component,before,GetTickCount64());
     }
+    state::activity::vanilla::one_au::observe_position(position[0],position[1],position[2]);
+    state::activity::vanilla::one_au::observe_native_player(before);
+    state::activity::vanilla::homecoming::observe_position(position[0],position[1],position[2]);
+    state::activity::vanilla::adieu::observe_position(position[0],position[1],position[2]);
     observe_crown_route(component,position);
     return true;
 }

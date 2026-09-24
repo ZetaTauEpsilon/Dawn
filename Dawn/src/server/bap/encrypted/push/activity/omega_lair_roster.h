@@ -92,7 +92,6 @@ template<class Storage, class FindGroup>
     const bool firstCrown = content == Content::crown;
     const auto registry = firstCrown ? crown::kRegistry : boss ? intro::kBossRegistry : intro::kIntroRegistry;
     const auto tag = firstCrown ? crown::kRegistryDefinition : boss ? 0x80F475EEU : kRegistryTag;
-    const auto hint = firstCrown ? 1072U : boss ? 1071U : kIndexHint;
     const auto type = boss ? 1U : 6U;
     const auto slotIndex = boss ? 0U : intro::kIntroSlot;
     const auto blocks = roster.bubbleSubBlocks;
@@ -163,13 +162,7 @@ template<class Storage, class FindGroup>
         }
         return false;
     };
-    bool found = findGroup(hint, group) && matches();
-    // The hint is only an optimization. Cache order can change; identity must still match.
-    for (std::size_t index = 0; !found && index < layouts::kRosterGroupCapacity; ++index) {
-        if (!findGroup(index, group)) { break; }
-        found = matches();
-    }
-    if (!found) { return Admission::missingGroup; }
+    if (!findGroup(registry, tag, group) || !matches()) { return Admission::missingGroup; }
 
     auto& keys = storage.rosterSubBlockKeys[blockIndex];
     if (blockIndex < blocks.size() && blocks[blockIndex].keys.data() != keys.data()) {
@@ -264,12 +257,11 @@ template<class Storage,class FindGroup>
             std::span(group.slotFlags).first(group.slotCount),
             std::span(group.slotIndices).first(group.slotCount)},expected);
     };
-    bool found=findGroup(expected.hint,group) && matches();
-    for(std::size_t i=0;!found && i<layouts::kRosterGroupCapacity;++i) {
-        if(!findGroup(i,group)) { break; }
-        found=matches();
+    // Resolve the complete identity before copying this large record. Repeated
+    // index scans copied the whole catalog for each of the seven combat groups.
+    if(!findGroup(expected.key,expected.tag,group) || !matches()) {
+        return Admission::missingGroup;
     }
-    if(!found) { return Admission::missingGroup; }
     auto& keys=storage.rosterSubBlockKeys[blockIndex];
     if(blockIndex<blocks.size() && blocks[blockIndex].keys.data()!=keys.data()) {
         std::copy(blocks[blockIndex].keys.begin(),blocks[blockIndex].keys.end(),keys.begin());
